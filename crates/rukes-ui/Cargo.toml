@@ -8,6 +8,11 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+rukes-core.workspace = true
+iced.workspace = true
+tracing.workspace = true
+crossbeam-channel.workspace = true
+raw-window-handle = "0.6"
 
 [lints]
 workspace = true

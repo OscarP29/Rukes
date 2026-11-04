@@ -1,10 +1,109 @@
-//! Punto de entrada de Rukes.
+//! Punto de entrada de Rukes: daemon residente con atajo global.
+#![windows_subsystem = "windows"]
 
+mod host;
 mod logging;
+mod settings;
+mod system_plugin;
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use rukes_config::paths::Paths;
+use rukes_config::{Config, ConfigWatcher};
+use rukes_core::{Engine, Frecency, persist};
+use rukes_platform::instance::{self, Instance};
+use rukes_ui::UiEvent;
+
+use crate::host::AppHost;
+
+/// Cada cuánto se guarda la frecency si cambió.
+const SAVE_EVERY: Duration = Duration::from_secs(30);
 
 fn main() -> anyhow::Result<()> {
-    let _guard = logging::init()?;
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "Rukes iniciado");
-    // Fase 1: hotkey global, instancia única, ventana y motor de búsqueda.
-    Ok(())
+    let paths = Paths::detect();
+    let _log = logging::init(&paths.logs_dir)?;
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        portable = paths.portable,
+        "Rukes iniciando"
+    );
+
+    let (config, config_error) = match rukes_config::load(&paths.config_file()) {
+        Ok(c) => (c, None),
+        Err(e) => {
+            tracing::error!(%e, "configuración no válida; se usan valores por defecto");
+            (Config::default(), Some(e))
+        }
+    };
+    rukes_core::i18n::set_language(
+        &config.general.language,
+        &rukes_platform::sysinfo::user_locale(),
+    );
+
+    // La UI se crea antes que el atajo para que la segunda instancia pueda pedir «mostrar».
+    let ui_tx = rukes_ui::channel();
+    let frecency = persist::load_json::<Frecency>(&paths.frecency_file())
+        .filter(Frecency::is_compatible)
+        .unwrap_or_default();
+    let workers = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(2, 4));
+    let engine = Arc::new(Engine::new(workers, settings::engine(&config), frecency));
+    let host = Arc::new(AppHost::new(
+        Arc::clone(&engine),
+        ui_tx.clone(),
+        paths.clone(),
+        &config,
+    ));
+
+    let show_host = Arc::clone(&host);
+    let _instance = match instance::acquire("Rukes", move || show_host.toggle(true))? {
+        Instance::Primary(guard) => guard,
+        Instance::Secondary => {
+            tracing::info!("ya hay una instancia; se le pidió mostrarse");
+            return Ok(());
+        }
+    };
+
+    host.install_plugins(&config);
+    engine.refresh_all();
+    host.start_hotkey(&config.general.hotkey);
+    if let Some(e) = config_error {
+        let _ = ui_tx.unbounded_send(UiEvent::Notice(format!(
+            "{}: {e}",
+            rukes_core::i18n::tr("error.config")
+        )));
+    }
+
+    let watch_host = Arc::clone(&host);
+    let _watcher = ConfigWatcher::spawn(&paths.config_file(), move |res| {
+        watch_host.apply_config(res)
+    })
+    .inspect_err(|e| tracing::warn!(%e, "no se pudo vigilar config.toml"))
+    .ok();
+
+    let save_engine = Arc::clone(&engine);
+    let frecency_file = paths.frecency_file();
+    std::thread::Builder::new()
+        .name("rukes-save".into())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(SAVE_EVERY);
+                if let Err(e) = save_engine.save_frecency(&frecency_file) {
+                    tracing::warn!(%e, "no se pudo guardar la frecency");
+                }
+            }
+        })?;
+
+    let (ws, private) = rukes_platform::sysinfo::memory_mb();
+    tracing::info!(
+        startup_ms = rukes_platform::sysinfo::process_age_ms(),
+        working_set_mb = ws,
+        private_mb = private,
+        "listo"
+    );
+
+    let ui_config = settings::ui(&config);
+    let result = rukes_ui::run(host.clone(), ui_tx, ui_config);
+    host.shutdown();
+    result.map_err(|e| anyhow::anyhow!("error de la UI: {e}"))
 }

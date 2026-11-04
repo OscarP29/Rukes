@@ -8,6 +8,11 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+rukes-core.workspace = true
+rukes-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

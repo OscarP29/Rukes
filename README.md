@@ -2,7 +2,7 @@
 
 Launcher de productividad y automatización para Windows 10/11, escrito en Rust: ligero, rápido y con la automatización como ciudadano de primera clase.
 
-> Estado: **Fase 0** (cimientos). Aún no es usable. La especificación completa está en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
+> Estado: **Fase 1** (MVP): busca y abre aplicaciones con `Alt+Space`. La especificación completa está en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
 
 ## Compilar
 
@@ -13,6 +13,25 @@ cargo build --release -p rukes-app
 ```
 
 El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (por ejemplo `RUKES_LOG=debug`).
+
+## Uso
+
+1. Ejecuta `rukes.exe`. Queda residente y sin ventana.
+2. Pulsa `Alt+Space` y escribe (`chr` → Google Chrome).
+
+| Tecla | Acción |
+| --- | --- |
+| `Enter` | Abrir |
+| `Ctrl+Enter` | Abrir como administrador |
+| `Ctrl+Shift+Enter` | Abrir la carpeta contenedora |
+| `Ctrl+C` | Copiar la ruta |
+| `↑` `↓` / `Tab` / `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
+| `Esc` | Ocultar |
+
+- **Configuración:** `%APPDATA%\Rukes\config.toml`, que se crea comentado en el primer arranque y
+  se aplica al guardar. También puedes abrirla escribiendo «configuración» en el launcher.
+- **Salir:** escribe «salir» en el launcher.
+- **Logs:** `%LOCALAPPDATA%\Rukes\logs`.
 
 ## Estructura
 

@@ -24,6 +24,14 @@ thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
 tracing-appender = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.9"
+notify = "8"
+crossbeam-channel = "0.5"
+nucleo-matcher = "0.3"
+iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "advanced", "image-without-codecs", "thread-pool", "crisp", "web-colors"] }
+windows = "0.62"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

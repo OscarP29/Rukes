@@ -1,0 +1,37 @@
+# Configuración de Rukes.
+# Los cambios se aplican al guardar. Si hay un error, Rukes lo indica y sigue con la última
+# configuración válida. Cualquier clave que borres vuelve a su valor por defecto.
+
+[general]
+# Atajo global. Modificadores: Ctrl, Alt, Shift, Win. Ej.: "Alt+Space", "Ctrl+Shift+K".
+hotkey = "Alt+Space"
+# Idioma: "auto" (el del sistema), "es" o "en".
+language = "auto"
+
+[window]
+# "center" o "top_center".
+position = "center"
+width = 680
+# Resultados visibles a la vez.
+max_results = 8
+hide_on_blur = true
+hide_after_action = true
+# Al mostrar la ventana: "clear", "keep" o "select_all".
+on_show = "select_all"
+# "mica", "acrylic" o "solid".
+backdrop = "mica"
+
+[search]
+# Peso del uso frecuente/reciente frente a la coincidencia de texto (0 a 1).
+frecency_weight = 0.35
+frecency_half_life_days = 7.0
+
+[plugins.apps]
+enabled = true
+priority = 0.0
+include_path = true
+
+[plugins.apps.aliases]
+# alias = "Nombre de la app tal y como aparece en el menú Inicio"
+# c = "Google Chrome"
+# code = "Visual Studio Code"
