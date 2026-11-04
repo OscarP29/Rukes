@@ -1,0 +1,27 @@
+[package]
+name = "rukes-app"
+description = "Binario principal de Rukes: daemon y orquestación."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "rukes"
+path = "src/main.rs"
+
+[dependencies]
+rukes-core.workspace = true
+rukes-config.workspace = true
+rukes-platform.workspace = true
+rukes-plugins.workspace = true
+rukes-script.workspace = true
+rukes-ui.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+
+[lints]
+workspace = true

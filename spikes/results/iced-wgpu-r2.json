@@ -1,0 +1,10 @@
+{
+  "engine": "iced-wgpu-r2",
+  "exe_mb": 8.64,
+  "cold_start_first_frame_ms": 442.7,
+  "show_latency_ms": { "p50": 4.2, "p95": 4.5, "max": 4.5, "samples": 10 },
+  "mem_after_start_mb": { "working_set": 144.0, "private": 124.4 },
+  "mem_hidden_mb": { "working_set": 147.2, "private": 128.2 },
+  "mem_visible_mb": { "working_set": 147.2, "private": 128.2 },
+  "animation": { "fps": 61.1, "max_frame_gap_ms": 19.0, "frames_over_25ms": 0, "frames": 184 }
+}

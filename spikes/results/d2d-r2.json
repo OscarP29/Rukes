@@ -1,0 +1,10 @@
+{
+  "engine": "d2d-r2",
+  "exe_mb": 0.22,
+  "cold_start_first_frame_ms": 373.4,
+  "show_latency_ms": { "p50": 5.2, "p95": 6.6, "max": 6.6, "samples": 10 },
+  "mem_after_start_mb": { "working_set": 33.1, "private": 14.0 },
+  "mem_hidden_mb": { "working_set": 34.0, "private": 14.9 },
+  "mem_visible_mb": { "working_set": 34.1, "private": 15.2 },
+  "animation": { "fps": 60.1, "max_frame_gap_ms": 17.9, "frames_over_25ms": 0, "frames": 181 }
+}

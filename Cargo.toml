@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["spikes"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = ""
+authors = ["Henry Osorio"]
+
+[workspace.dependencies]
+rukes-core = { path = "crates/rukes-core" }
+rukes-plugins = { path = "crates/rukes-plugins" }
+rukes-script = { path = "crates/rukes-script" }
+rukes-config = { path = "crates/rukes-config" }
+rukes-platform = { path = "crates/rukes-platform" }
+rukes-ui = { path = "crates/rukes-ui" }
+
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+tracing-appender = "0.2"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+undocumented_unsafe_blocks = "deny"
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+debug = false
+# panic = "unwind" se mantiene: RNF-010 necesita catch_unwind para aislar plugins.
+
+[profile.dev]
+debug = "line-tables-only"

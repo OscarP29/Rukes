@@ -1,0 +1,19 @@
+# Workspace aparte para los spikes de la fase 0: no contamina el build del proyecto principal.
+[workspace]
+resolver = "3"
+members = ["common", "d2d", "egui", "iced"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+spike-common = { path = "common" }
+windows = "0.62"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

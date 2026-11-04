@@ -1,0 +1,10 @@
+{
+  "engine": "egui-glow-r2",
+  "exe_mb": 5.66,
+  "cold_start_first_frame_ms": 218.2,
+  "show_latency_ms": { "p50": 5.2, "p95": 5.5, "max": 5.5, "samples": 10 },
+  "mem_after_start_mb": { "working_set": 84.6, "private": 88.2 },
+  "mem_hidden_mb": { "working_set": 91.3, "private": 88.5 },
+  "mem_visible_mb": { "working_set": 98.8, "private": 88.5 },
+  "animation": { "fps": 60.3, "max_frame_gap_ms": 17.9, "frames_over_25ms": 0, "frames": 181 }
+}

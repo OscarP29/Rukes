@@ -1,0 +1,10 @@
+{
+  "engine": "egui-wgpu-r1",
+  "exe_mb": 11.24,
+  "cold_start_first_frame_ms": 693.1,
+  "show_latency_ms": { "p50": 5.5, "p95": 6.8, "max": 6.8, "samples": 10 },
+  "mem_after_start_mb": { "working_set": 373.0, "private": 327.7 },
+  "mem_hidden_mb": { "working_set": 379.4, "private": 334.4 },
+  "mem_visible_mb": { "working_set": 379.4, "private": 334.4 },
+  "animation": { "fps": 61.2, "max_frame_gap_ms": 20.7, "frames_over_25ms": 0, "frames": 184 }
+}

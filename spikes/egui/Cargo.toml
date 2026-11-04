@@ -1,0 +1,15 @@
+[package]
+name = "spike-egui"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+default = ["glow"]
+glow = ["eframe/glow"]
+wgpu = ["eframe/wgpu"]
+
+[dependencies]
+spike-common.workspace = true
+eframe = { version = "=0.35.0", default-features = false, features = ["default_fonts"] }
+raw-window-handle = "0.6"
