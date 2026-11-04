@@ -35,13 +35,13 @@ const COMMANDS: [(&str, &str, &str, &str); 3] = [
     (
         "quit",
         "system.quit",
-        "system.quit.sub",
+        "system.quit_sub",
         "rukes exit quit salir cerrar",
     ),
     (
         "reload",
         "system.reload",
-        "system.reload.sub",
+        "system.reload_sub",
         "rukes reload recargar reindex",
     ),
     (

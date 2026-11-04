@@ -1,6 +1,6 @@
 //! Cambiar a una ventana abierta (RF-050).
 
-use rukes_core::i18n::{Lang, language};
+use rukes_core::i18n::tr;
 use rukes_core::{
     ActionId, ActionOutcome, CancelToken, Fuzzy, Icon, Plugin, PluginError, PluginMetadata, Query,
     ResultItem,
@@ -24,7 +24,6 @@ fn exe_name(w: &WindowInfo) -> String {
 /// Construye los resultados a partir de una lista de ventanas.
 pub fn search(windows: &[WindowInfo], text: &str, targeted: bool) -> Vec<ResultItem> {
     let mut f = Fuzzy::new(text);
-    let es = language() == Lang::Es;
     windows
         .iter()
         .enumerate()
@@ -39,11 +38,10 @@ pub fn search(windows: &[WindowInfo], text: &str, targeted: bool) -> Vec<ResultI
                 by_title.into_iter().chain(by_exe).reduce(f32::max)?
             };
             let mut it = ResultItem::new(format!("hwnd:{}", w.hwnd), w.title.clone());
-            let state = match (es, w.minimized) {
-                (true, true) => "Ventana minimizada",
-                (true, false) => "Ventana abierta",
-                (false, true) => "Minimized window",
-                (false, false) => "Open window",
+            let state = if w.minimized {
+                tr("windows.minimized")
+            } else {
+                tr("windows.open")
             };
             it.subtitle = if exe.is_empty() {
                 state.to_owned()
@@ -65,11 +63,7 @@ impl Plugin for WindowsPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "windows".into(),
-            name: if language() == Lang::Es {
-                "Ventanas".into()
-            } else {
-                "Windows".into()
-            },
+            name: tr("windows.name").into(),
             prefix: None,
             keywords: vec!["win".into(), "ventana".into(), "ventanas".into()],
             // Por debajo de las apps: al escribir «chrome» primero sale la app.
@@ -93,14 +87,7 @@ impl Plugin for WindowsPlugin {
         if winlist::activate(hwnd) {
             Ok(ActionOutcome::Hide)
         } else {
-            Err(PluginError::Failed(
-                if language() == Lang::Es {
-                    "La ventana ya no existe"
-                } else {
-                    "The window no longer exists"
-                }
-                .into(),
-            ))
+            Err(PluginError::Failed(tr("windows.gone").into()))
         }
     }
 }

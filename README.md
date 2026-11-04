@@ -43,11 +43,18 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `Ctrl+T` | Abrir una terminal en la carpeta |
 | `Ctrl+E` | Editar el script |
 | `Ctrl+D` | Mover el script a la papelera (con confirmación) |
+| `Ctrl+P` | Mostrar u ocultar la vista previa |
 | `↑` `↓` / `Tab` / `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
 | `Esc` | Ocultar |
 
 - **Configuración:** `%APPDATA%\Rukes\config.toml`, que se crea comentado en el primer arranque y
   se aplica al guardar. También puedes abrirla escribiendo «configuración» en el launcher.
+- **Temas:** `theme` en `[general]` (`system`, `tokyo-night`, `catppuccin-mocha`, `nord`…).
+  Copia un archivo de `themes/` a la carpeta `themes` junto a `config.toml` para crear el tuyo;
+  se aplica al guardar.
+- **Idioma:** `language = "auto"`, `"es"` o `"en"`. Los textos están en
+  `crates/rukes-core/lang`; un archivo en la carpeta `lang` de la configuración los cambia o
+  añade un idioma.
 - **Salir:** escribe «salir» en el launcher o usa el menú del icono de la bandeja.
 - **Iniciar con Windows:** `start_with_windows = true` en `[general]`.
 - **Logs:** `%LOCALAPPDATA%\Rukes\logs`.
@@ -64,6 +71,7 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `crates/rukes-ui` | Ventana, render, animaciones |
 | `crates/rukes-app` | Binario `rukes.exe` |
 | `scripts-examples/` | Scripts de ejemplo |
+| `themes/` | Temas incluidos (TOML) |
 | `spikes/` | Prototipos desechables de la fase 0 (workspace aparte) |
 | `docs/decisions/` | ADRs |
 

@@ -1,0 +1,166 @@
+# Textos de Rukes en español. Copia este archivo a la carpeta «lang» de la configuración
+# para cambiar textos sin recompilar. {nombre} se sustituye por un valor.
+
+[action]
+copy_path = "Copiar ruta"
+open = "Abrir"
+open_location = "Abrir ubicación"
+open_with = "Abrir con…"
+run_as_admin = "Abrir como administrador"
+terminal_here = "Abrir terminal aquí"
+
+[apps]
+name = "Aplicaciones"
+packaged = "Aplicación de la Tienda"
+path = "Ejecutable en PATH"
+
+[calc]
+days = "{n} días"
+enter_copies = "Enter copia"
+name = "Calculadora"
+
+[common]
+cancel = "Cancelar"
+
+[error]
+action = "No se pudo completar la acción"
+config = "Error en la configuración"
+hotkey = "No se pudo registrar el atajo"
+lang = "Error en el archivo de idioma"
+theme = "Error en el tema"
+
+[files]
+name = "Archivos"
+name_dirs = "Carpetas"
+name_files = "Solo archivos"
+
+[generators]
+b64_decoded = "Base64 decodificado"
+hex_decoded = "Hex decodificado"
+html_decoded = "HTML decodificado"
+lorem = "Lorem ipsum · {n} párrafo(s)"
+name = "Generadores"
+no_symbols = "sin símbolos"
+password = "Contraseña"
+unix_ms = "Unix (milisegundos)"
+unix_s = "Unix (segundos)"
+url_decoded = "URL decodificada"
+
+[notify]
+copied = "Copiado al portapapeles"
+
+[preview]
+app = "Aplicación"
+binary = "Archivo binario: sin vista previa de texto"
+file = "Archivo {ext}"
+file_noext = "Archivo"
+folder = "Carpeta"
+hint = "Ctrl+P oculta la vista previa"
+items = "Elementos"
+kind = "Tipo"
+location = "Ubicación"
+modified = "Modificado"
+size = "Tamaño"
+unreadable = "No se puede leer"
+
+[processes]
+confirm = "Sí, terminar {target}"
+confirm_sub = "Se perderán los datos sin guardar"
+count = "{n} procesos"
+kill_failed = "No se pudo terminar (¿requiere administrador?)"
+name = "Procesos"
+system = "proceso del sistema"
+target_many = "{name} ({n} procesos)"
+tree = "Terminar {target} y sus procesos hijos"
+tree_sub = "Árbol de procesos"
+
+[scripts]
+ago = "hace {n} {unit}"
+alias = "Alias"
+cancelled = "cancelado"
+cancelling = "Cancelando…"
+copy_output = "Copiar salida"
+could_not_start = "no se pudo lanzar"
+create = "Crear"
+create_script = "Crear script"
+detached = "lanzado sin capturar la salida"
+edit = "Editar"
+edit_script = "Editar script"
+enter_cancels = "Enter cancela"
+enter_cancels_esc = "Enter cancela · Esc la deja en segundo plano (logs)"
+enter_copies_output = "Enter copia toda la salida"
+exit_code = "código"
+it_had_already_finished = "Ya había terminado"
+missing_arguments = "Faltan argumentos"
+move_to_recycle_bin = "Mover a la papelera"
+new_script = "Nuevo script"
+new_script_ellipsis = "Nuevo script…"
+new_script_sub = "Crea un script desde una plantilla"
+no_runs_yet = "Sin ejecuciones todavía"
+no_workdir = "no existe el directorio de trabajo"
+not_json = "La salida no es JSON con resultados"
+opens_in_the_editor = "se abre en el editor"
+output_shown_in_the_terminal = "(salida en la terminal)"
+press_enter_to_close = "Pulsa Enter para cerrar"
+run = "Ejecutar"
+running = "Ejecutando"
+running_ellipsis = "Ejecutando…"
+script_no_longer_exists = "el script ya no existe"
+search = "Buscar"
+show_output = "Ver salida"
+timed_out = "tiempo agotado"
+timed_out_title = "Tiempo agotado"
+type = "Escribe"
+yes_move_to_recycle_bin = "Sí, mover a la papelera"
+
+[search]
+no_results = "Sin resultados"
+placeholder = "Buscar apps, archivos y comandos…"
+
+[shell]
+admin_hint = "Ctrl+Enter: como administrador"
+open = "Abrir {cmd}"
+run = "Ejecutar: {cmd}"
+uri = "URI del shell"
+
+[syscmd]
+confirm = "Sí, {what}"
+confirm_sub = "Enter para confirmar"
+emptybin = "Vaciar papelera"
+hibernate = "Hibernar"
+lock = "Bloquear"
+logoff = "Cerrar sesión"
+name = "Sistema"
+restart = "Reiniciar"
+shutdown = "Apagar"
+sleep = "Suspender"
+subtitle = "Comando del sistema"
+
+[system]
+config = "Abrir configuración de Rukes"
+quit = "Salir de Rukes"
+quit_sub = "Cierra el launcher por completo"
+reload = "Recargar Rukes"
+reload_sub = "Vuelve a indexar las aplicaciones"
+
+[templates]
+js = "JavaScript (Node, Deno o Bun)"
+rhai = "Rhai (embebido, sin dependencias)"
+
+[tray]
+pause = "Pausar atajo"
+quit = "Salir"
+reload = "Recargar índices"
+resume = "Reanudar atajo"
+settings = "Configuración"
+show = "Mostrar"
+
+[web]
+open = "Abrir {url}"
+search = "Buscar «{q}» en {engine}"
+
+[windows]
+gone = "La ventana ya no existe"
+minimized = "Ventana minimizada"
+name = "Ventanas"
+open = "Ventana abierta"

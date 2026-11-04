@@ -3,6 +3,7 @@
 //! Es el único crate del proyecto con código `unsafe`; cada bloque lleva su `// SAFETY:`.
 //! Las funciones públicas son seguras y reciben los `HWND` como [`Hwnd`] (un `isize`).
 
+pub mod appearance;
 pub mod apps;
 pub mod autostart;
 pub mod clipboard;

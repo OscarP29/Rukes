@@ -1,0 +1,12 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "gruvbox" y cambia solo lo que quieras.
+[theme]
+name = "Gruvbox"
+dark = true
+
+[theme.colors]
+background = "#282828"
+foreground = "#ebdbb2"
+accent = "#fabd2f"
+selection = "#3c3836"
+muted = "#928374"

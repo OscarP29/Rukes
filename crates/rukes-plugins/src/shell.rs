@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use base64::Engine as _;
-use rukes_core::i18n::{Lang, language};
+use rukes_core::i18n::{tr, trf};
 use rukes_core::{
     Action, ActionId, ActionOutcome, CancelToken, Fuzzy, Icon, Plugin, PluginError, PluginMetadata,
     Query, ResultItem,
@@ -130,37 +130,14 @@ impl Plugin for ShellPlugin {
             sink(Vec::new());
             return;
         }
-        let es = language() == Lang::Es;
         let mut it = if is_uri(cmd) {
-            let mut it = ResultItem::new(
-                "uri",
-                if es {
-                    format!("Abrir {cmd}")
-                } else {
-                    format!("Open {cmd}")
-                },
-            );
-            it.subtitle = if es {
-                "URI del shell".into()
-            } else {
-                "Shell URI".into()
-            };
+            let mut it = ResultItem::new("uri", trf("shell.open", &[("cmd", &cmd)]));
+            it.subtitle = tr("shell.uri").into();
             it.payload = format!("uri:{cmd}");
             it
         } else {
-            let mut it = ResultItem::new(
-                "run",
-                if es {
-                    format!("Ejecutar: {cmd}")
-                } else {
-                    format!("Run: {cmd}")
-                },
-            );
-            let admin = if es {
-                "Ctrl+Enter: como administrador"
-            } else {
-                "Ctrl+Enter: as administrator"
-            };
+            let mut it = ResultItem::new("run", trf("shell.run", &[("cmd", &cmd)]));
+            let admin = tr("shell.admin_hint");
             it.subtitle = format!("{} · {admin}", self.settings.shell);
             it.payload = format!("cmd:{cmd}");
             it
@@ -198,8 +175,7 @@ pub struct SystemCommandsPlugin {
 struct Entry {
     id: &'static str,
     cmd: Command,
-    es: &'static str,
-    en: &'static str,
+    key: &'static str,
     words: &'static str,
 }
 
@@ -207,50 +183,43 @@ const ENTRIES: &[Entry] = &[
     Entry {
         id: "lock",
         cmd: Command::Lock,
-        es: "Bloquear",
-        en: "Lock",
+        key: "syscmd.lock",
         words: "lock bloquear",
     },
     Entry {
         id: "sleep",
         cmd: Command::Sleep,
-        es: "Suspender",
-        en: "Sleep",
+        key: "syscmd.sleep",
         words: "sleep suspender dormir",
     },
     Entry {
         id: "hibernate",
         cmd: Command::Hibernate,
-        es: "Hibernar",
-        en: "Hibernate",
+        key: "syscmd.hibernate",
         words: "hibernate hibernar",
     },
     Entry {
         id: "shutdown",
         cmd: Command::Shutdown,
-        es: "Apagar",
-        en: "Shut down",
+        key: "syscmd.shutdown",
         words: "shutdown apagar poweroff",
     },
     Entry {
         id: "restart",
         cmd: Command::Restart,
-        es: "Reiniciar",
-        en: "Restart",
+        key: "syscmd.restart",
         words: "restart reboot reiniciar",
     },
     Entry {
         id: "logoff",
         cmd: Command::LogOff,
-        es: "Cerrar sesión",
-        en: "Sign out",
+        key: "syscmd.logoff",
         words: "logoff logout signout cerrar sesion",
     },
     Entry {
         id: "emptybin",
         cmd: Command::EmptyRecycleBin,
-        es: "Vaciar papelera",
-        en: "Empty Recycle Bin",
+        key: "syscmd.emptybin",
         words: "papelera recycle bin trash vaciar empty",
     },
 ];
@@ -260,10 +229,7 @@ fn entry(id: &str) -> Option<&'static Entry> {
 }
 
 fn title(e: &Entry) -> &'static str {
-    match language() {
-        Lang::Es => e.es,
-        Lang::En => e.en,
-    }
+    tr(e.key)
 }
 
 impl SystemCommandsPlugin {
@@ -272,22 +238,13 @@ impl SystemCommandsPlugin {
     }
 
     fn confirmation(e: &Entry) -> Vec<ResultItem> {
-        let es = language() == Lang::Es;
         let mut yes = ResultItem::new(
             format!("confirm:{}", e.id),
-            if es {
-                format!("Sí, {}", title(e).to_lowercase())
-            } else {
-                format!("Yes, {}", title(e).to_lowercase())
-            },
+            trf("syscmd.confirm", &[("what", &title(e).to_lowercase())]),
         );
-        yes.subtitle = if es {
-            "Enter para confirmar".into()
-        } else {
-            "Press Enter to confirm".into()
-        };
+        yes.subtitle = tr("syscmd.confirm_sub").into();
         yes.icon = Icon::Named("system".into());
-        let mut no = ResultItem::new("cancel", if es { "Cancelar" } else { "Cancel" });
+        let mut no = ResultItem::new("cancel", tr("common.cancel"));
         no.icon = Icon::Named("system".into());
         vec![yes, no]
     }
@@ -297,11 +254,7 @@ impl Plugin for SystemCommandsPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "syscmd".into(),
-            name: if language() == Lang::Es {
-                "Sistema".into()
-            } else {
-                "System".into()
-            },
+            name: tr("syscmd.name").into(),
             prefix: None,
             keywords: Vec::new(),
             priority: 0.0,
@@ -311,7 +264,6 @@ impl Plugin for SystemCommandsPlugin {
 
     fn query(&self, q: &Query, _cancel: &CancelToken, sink: &mut dyn FnMut(Vec<ResultItem>)) {
         let mut f = Fuzzy::new(&q.text);
-        let es = language() == Lang::Es;
         let items = ENTRIES
             .iter()
             .filter_map(|e| {
@@ -328,11 +280,7 @@ impl Plugin for SystemCommandsPlugin {
                     .max(if extra >= 0.9 { extra } else { 0.0 });
                 (score > 0.0).then(|| {
                     let mut it = ResultItem::new(e.id, t);
-                    it.subtitle = if es {
-                        "Comando del sistema".into()
-                    } else {
-                        "System command".into()
-                    };
+                    it.subtitle = tr("syscmd.subtitle").into();
                     it.icon = Icon::Named("system".into());
                     it.fuzzy = score;
                     it
@@ -427,7 +375,7 @@ mod tests {
 
     #[test]
     fn system_commands_ask_for_confirmation() {
-        rukes_core::i18n::set_language("es", "");
+        let _ = rukes_core::i18n::set_language("es", "");
         let p = SystemCommandsPlugin { confirm: true };
         let q = Query {
             id: rukes_core::QueryId(1),

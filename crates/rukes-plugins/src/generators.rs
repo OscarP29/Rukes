@@ -11,7 +11,7 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
-use rukes_core::i18n::{Lang, language, tr};
+use rukes_core::i18n::{tr, trf};
 use rukes_core::{
     ActionId, ActionOutcome, CancelToken, Icon, Plugin, PluginError, PluginMetadata, Query,
     ResultItem,
@@ -256,7 +256,6 @@ impl GeneratorsPlugin {
             Some((w, a)) => (fold(w), a.trim()),
             None => (fold(text), ""),
         };
-        let es = language() == Lang::Es;
         let mut out = Vec::new();
         match word.as_str() {
             "uuid" | "guid" | "uuid4" | "uuid7" => {
@@ -274,7 +273,7 @@ impl GeneratorsPlugin {
             }
             "pass" | "password" | "contrasena" | "pwd" => {
                 let len = arg.parse().unwrap_or(self.password_length);
-                let label = if es { "Contraseña" } else { "Password" };
+                let label = tr("generators.password");
                 if let Some(p) = password(len, self.password_symbols) {
                     out.push(result("password", p, &format!("{label} · {len}")));
                 }
@@ -284,10 +283,7 @@ impl GeneratorsPlugin {
                     let mut it = result(
                         "password_alnum",
                         p,
-                        &format!(
-                            "{label} · {len} · {}",
-                            if es { "sin símbolos" } else { "no symbols" }
-                        ),
+                        &format!("{label} · {len} · {}", tr("generators.no_symbols")),
                     );
                     it.fuzzy = 0.95;
                     out.push(it);
@@ -295,11 +291,7 @@ impl GeneratorsPlugin {
             }
             "lorem" | "ipsum" => {
                 let n = arg.parse().unwrap_or(1);
-                let label = if es {
-                    format!("Lorem ipsum · {n} párrafo(s)")
-                } else {
-                    format!("Lorem ipsum · {n} paragraph(s)")
-                };
+                let label = trf("generators.lorem", &[("n", &n)]);
                 out.push(result("lorem", lorem(n), &label));
             }
             "ts" | "timestamp" | "unix" | "epoch" => {
@@ -313,24 +305,8 @@ impl GeneratorsPlugin {
                     out.push(result("ts_iso", iso_utc(secs), "UTC"));
                 } else if arg.is_empty() {
                     let (s, ms) = now_unix();
-                    out.push(result(
-                        "ts_s",
-                        s.to_string(),
-                        if es {
-                            "Unix (segundos)"
-                        } else {
-                            "Unix (seconds)"
-                        },
-                    ));
-                    let mut it = result(
-                        "ts_ms",
-                        ms.to_string(),
-                        if es {
-                            "Unix (milisegundos)"
-                        } else {
-                            "Unix (milliseconds)"
-                        },
-                    );
+                    out.push(result("ts_s", s.to_string(), tr("generators.unix_s")));
+                    let mut it = result("ts_ms", ms.to_string(), tr("generators.unix_ms"));
                     it.fuzzy = 0.95;
                     out.push(it);
                     let mut it = result("ts_iso", iso_utc(s), "ISO 8601 UTC");
@@ -362,58 +338,27 @@ impl GeneratorsPlugin {
                     return out;
                 }
                 let b64 = base64::engine::general_purpose::STANDARD;
-                let encoded =
-                    match w {
-                        "b64" | "base64" => Some((b64.encode(arg), "Base64")),
-                        "b64d" | "unbase64" | "base64d" => b64
-                            .decode(arg.trim())
-                            .ok()
-                            .and_then(|b| String::from_utf8(b).ok())
-                            .map(|s| {
-                                (
-                                    s,
-                                    if es {
-                                        "Base64 decodificado"
-                                    } else {
-                                        "Base64 decoded"
-                                    },
-                                )
-                            }),
-                        "url" | "urlencode" => Some((percent_encode(arg), "URL")),
-                        "urld" | "urldecode" => percent_decode(arg).map(|s| {
-                            (
-                                s,
-                                if es {
-                                    "URL decodificada"
-                                } else {
-                                    "URL decoded"
-                                },
-                            )
-                        }),
-                        "html" | "htmlencode" => Some((html_encode(arg), "HTML")),
-                        "htmld" | "htmldecode" => Some((
-                            html_decode(arg),
-                            if es {
-                                "HTML decodificado"
-                            } else {
-                                "HTML decoded"
-                            },
-                        )),
-                        "hex" => Some((to_hex(arg.as_bytes()), "Hex")),
-                        "unhex" | "hexd" => from_hex(arg)
-                            .and_then(|b| String::from_utf8(b).ok())
-                            .map(|s| {
-                                (
-                                    s,
-                                    if es {
-                                        "Hex decodificado"
-                                    } else {
-                                        "Hex decoded"
-                                    },
-                                )
-                            }),
-                        _ => None,
-                    };
+                let encoded = match w {
+                    "b64" | "base64" => Some((b64.encode(arg), "Base64")),
+                    "b64d" | "unbase64" | "base64d" => b64
+                        .decode(arg.trim())
+                        .ok()
+                        .and_then(|b| String::from_utf8(b).ok())
+                        .map(|s| (s, tr("generators.b64_decoded"))),
+                    "url" | "urlencode" => Some((percent_encode(arg), "URL")),
+                    "urld" | "urldecode" => {
+                        percent_decode(arg).map(|s| (s, tr("generators.url_decoded")))
+                    }
+                    "html" | "htmlencode" => Some((html_encode(arg), "HTML")),
+                    "htmld" | "htmldecode" => {
+                        Some((html_decode(arg), tr("generators.html_decoded")))
+                    }
+                    "hex" => Some((to_hex(arg.as_bytes()), "Hex")),
+                    "unhex" | "hexd" => from_hex(arg)
+                        .and_then(|b| String::from_utf8(b).ok())
+                        .map(|s| (s, tr("generators.hex_decoded"))),
+                    _ => None,
+                };
                 if let Some((v, label)) = encoded {
                     out.push(result("encode", v, label));
                 }
@@ -427,11 +372,7 @@ impl Plugin for GeneratorsPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "generators".into(),
-            name: if language() == Lang::Es {
-                "Generadores".into()
-            } else {
-                "Generators".into()
-            },
+            name: tr("generators.name").into(),
             prefix: None,
             keywords: Vec::new(),
             priority: 0.4,

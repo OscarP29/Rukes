@@ -2,10 +2,9 @@
 
 use rukes_config::{Config, OnShow, WindowPosition};
 use rukes_core::EngineConfig;
-use rukes_platform::dwm::Backdrop;
 use rukes_platform::window::Placement;
 use rukes_plugins::apps::AppsSettings;
-use rukes_ui::UiConfig;
+use rukes_ui::{UiConfig, UiStyle};
 
 pub fn engine(c: &Config) -> EngineConfig {
     EngineConfig {
@@ -14,9 +13,10 @@ pub fn engine(c: &Config) -> EngineConfig {
     }
 }
 
-pub fn ui(c: &Config) -> UiConfig {
+/// `animations`: las de Windows; `scale`: escalado de texto del sistema (RF-214).
+pub fn ui(c: &Config, style: UiStyle, animations: bool, scale: f32) -> UiConfig {
     UiConfig {
-        width: c.window.width.clamp(360, 1600) as f32,
+        width: (c.window.width.clamp(360, 1600) as f32 * scale).round(),
         max_results: c.window.max_results.clamp(1, 20),
         hide_on_blur: c.window.hide_on_blur,
         hide_after_action: c.window.hide_after_action,
@@ -25,6 +25,10 @@ pub fn ui(c: &Config) -> UiConfig {
             OnShow::Keep => rukes_ui::OnShow::Keep,
             OnShow::SelectAll => rukes_ui::OnShow::SelectAll,
         },
+        style,
+        animations: c.window.animations && animations,
+        preview_panel: c.window.preview_panel,
+        preview_width: (c.window.preview_width.clamp(200, 900) as f32 * scale).round(),
     }
 }
 
@@ -33,10 +37,6 @@ pub fn placement(c: &Config) -> Placement {
         WindowPosition::Center => Placement::CENTER,
         WindowPosition::TopCenter => Placement::TOP_CENTER,
     }
-}
-
-pub fn backdrop(c: &Config) -> Backdrop {
-    Backdrop::from_config(&c.window.backdrop)
 }
 
 pub fn apps(c: &Config) -> AppsSettings {
@@ -48,9 +48,9 @@ pub fn apps(c: &Config) -> AppsSettings {
 }
 
 /// Alto lógico de la ventana con la lista llena; fija la posición vertical (RF-002).
-pub fn reference_height(c: &Config) -> f32 {
+pub fn reference_height(c: &Config, s: &UiStyle) -> f32 {
     let rows = c.window.max_results.clamp(1, 20) as f32;
-    56.0 + 1.0 + rows * 48.0 + 12.0
+    s.search_height + 1.0 + rows * s.row_height + 12.0
 }
 
 pub fn files(c: &Config) -> rukes_plugins::FilesSettings {

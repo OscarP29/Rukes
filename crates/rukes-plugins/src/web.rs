@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use rukes_core::i18n::{Lang, language};
+use rukes_core::i18n::trf;
 use rukes_core::{
     ActionId, ActionOutcome, CancelToken, Icon, Plugin, PluginError, PluginMetadata, Query,
     ResultItem,
@@ -119,17 +119,11 @@ impl Plugin for WebPlugin {
             {
                 let url = template.replace("{q}", &percent_encode(&q.text));
                 let name = engine_name(template);
-                let title = match language() {
-                    Lang::Es => format!("Buscar «{}» en {name}", q.text),
-                    Lang::En => format!("Search {name} for “{}”", q.text),
-                };
+                let title = trf("web.search", &[("q", &q.text), ("engine", &name)]);
                 out.push(link(&format!("search:{keyword}"), title, url.clone(), url));
             }
         } else if let Some(url) = as_url(&q.text) {
-            let title = match language() {
-                Lang::Es => format!("Abrir {}", q.text),
-                Lang::En => format!("Open {}", q.text),
-            };
+            let title = trf("web.open", &[("url", &q.text)]);
             out.push(link("url", title, url.clone(), url));
         }
         sink(out);

@@ -77,6 +77,12 @@ pub struct General {
     /// Terminal para los comandos de shell y «abrir terminal aquí»: `wt` (Windows Terminal) o
     /// `none` (la consola del propio shell).
     pub terminal: String,
+    /// Tema (RF-192): uno incluido, uno de la carpeta `themes` o `system` (RF-198).
+    pub theme: String,
+    /// Tema cuando `theme = "system"` y el sistema está en modo claro.
+    pub light_theme: String,
+    /// Tema cuando `theme = "system"` y el sistema está en modo oscuro.
+    pub dark_theme: String,
 }
 
 impl Default for General {
@@ -86,6 +92,9 @@ impl Default for General {
             language: "auto".into(),
             start_with_windows: false,
             terminal: "wt".into(),
+            theme: "system".into(),
+            light_theme: "catppuccin-latte".into(),
+            dark_theme: "tokyo-night".into(),
         }
     }
 }
@@ -130,8 +139,14 @@ pub struct Window {
     pub hide_after_action: bool,
     /// Comportamiento del texto al mostrar (RF-004).
     pub on_show: OnShow,
-    /// Fondo: `mica`, `acrylic` o `solid` (RF-190).
+    /// Fondo: `auto` (el del tema), `mica`, `acrylic` o `solid` (RF-190).
     pub backdrop: String,
+    /// Animaciones de 80–150 ms (RF-195). Se desactivan también si Windows las tiene apagadas.
+    pub animations: bool,
+    /// Panel de previsualización a la derecha (RF-017). Se alterna con Ctrl+P.
+    pub preview_panel: bool,
+    /// Ancho lógico del panel de previsualización.
+    pub preview_width: u32,
 }
 
 impl Default for Window {
@@ -143,7 +158,10 @@ impl Default for Window {
             hide_on_blur: true,
             hide_after_action: true,
             on_show: OnShow::default(),
-            backdrop: "mica".into(),
+            backdrop: "auto".into(),
+            animations: true,
+            preview_panel: false,
+            preview_width: 340,
         }
     }
 }

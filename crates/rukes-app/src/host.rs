@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
+use rukes_config::theme::Theme;
 use rukes_config::{Config, ConfigError, Hotkey};
 use rukes_core::i18n::tr;
 use rukes_core::{ActionOutcome, Engine, Icon, Plugin, QueryId, ResultItem};
@@ -15,8 +16,10 @@ use rukes_plugins::{
     ShellSettings, SystemCommandsPlugin, WebPlugin, WindowsPlugin,
 };
 use rukes_script::{Catalog, Hooks, RunContext, Runs, Scripts, ScriptsPlugin};
-use rukes_ui::{Host, IconRgba, Sink, UiEvent, UiSender};
+use rukes_ui::{Host, IconRgba, Preview, Sink, UiConfig, UiEvent, UiSender, UiStyle};
 
+use crate::iconcache::IconCache;
+use crate::look::{self, System};
 use crate::settings;
 use crate::system_plugin::SystemPlugin;
 
@@ -53,6 +56,14 @@ struct Inner {
     hotkey: Option<HotkeyManager>,
     hotkey_text: String,
     last_refresh: Instant,
+    /// Último tema válido.
+    theme: Theme,
+    /// Estado del sistema con que se calculó el aspecto.
+    system: System,
+    /// Aspecto enviado a la UI.
+    style: UiStyle,
+    /// Fondo pedido a DWM (`backdrop`, oscuro) y el que se aplicó de verdad.
+    dwm: Option<((dwm::Backdrop, bool), dwm::Backdrop)>,
 }
 
 pub struct AppHost {
@@ -75,6 +86,7 @@ pub struct AppHost {
     scripts: Mutex<Option<ScriptCatalog>>,
     /// Historial de ejecuciones de scripts.
     runs: Mutex<Option<Arc<Runs>>>,
+    icon_cache: IconCache,
 }
 
 type ScriptCatalog = (
@@ -90,9 +102,11 @@ impl AppHost {
         paths: rukes_config::paths::Paths,
         config: &Config,
     ) -> Self {
+        let icon_cache = IconCache::open(paths.cache_dir.join("icons"));
         Self {
             engine,
             ui,
+            icon_cache,
             paths,
             hwnd: AtomicIsize::new(0),
             previous: AtomicIsize::new(0),
@@ -103,6 +117,10 @@ impl AppHost {
                 hotkey: None,
                 hotkey_text: String::new(),
                 last_refresh: Instant::now(),
+                theme: Theme::default(),
+                system: System::default(),
+                style: UiStyle::default(),
+                dwm: None,
             }),
             me: Mutex::new(Weak::new()),
             files: Mutex::new(None),
@@ -119,6 +137,85 @@ impl AppHost {
 
     fn notice(&self, text: String) {
         let _ = self.ui.unbounded_send(UiEvent::Notice(text));
+    }
+
+    /// Ajustes de la UI con el aspecto actual.
+    pub fn ui_config(&self) -> UiConfig {
+        let inner = self.inner();
+        settings::ui(
+            &inner.config,
+            inner.style.clone(),
+            inner.system.animations,
+            inner.system.text_scale,
+        )
+    }
+
+    /// Aplica a la ventana el fondo y el modo oscuro que tocan, si han cambiado.
+    fn apply_dwm(&self, inner: &mut Inner) {
+        let hwnd = self.hwnd.load(Ordering::SeqCst);
+        if hwnd == 0 {
+            return;
+        }
+        let want = (
+            look::backdrop(&inner.config, &inner.theme, &inner.system),
+            look::dark(&inner.theme, &inner.system),
+        );
+        if inner.dwm.is_some_and(|(w, _)| w == want) {
+            return;
+        }
+        let applied = dwm::apply(hwnd, want.0, want.1);
+        tracing::info!(?want, ?applied, "fondo de la ventana");
+        inner.dwm = Some((want, applied));
+    }
+
+    /// Recalcula el aspecto (tema, modo del sistema, contraste alto, escalado, animaciones) y
+    /// lo envía a la UI si ha cambiado. `reload` vuelve a leer el archivo del tema (RF-193).
+    pub fn refresh_look(&self, reload: bool) {
+        let sys = System::read();
+        let mut inner = self.inner();
+        let name_changed =
+            look::theme_name(&inner.config, &sys) != look::theme_name(&inner.config, &inner.system);
+        if !reload && !name_changed && sys == inner.system {
+            return;
+        }
+        if reload || name_changed {
+            match look::load_theme(&inner.config, &sys, &self.paths.themes_dir()) {
+                Ok(t) => {
+                    tracing::info!(theme = %t.name, "tema cargado");
+                    inner.theme = t;
+                }
+                Err(e) => {
+                    tracing::warn!(%e, "tema no válido; se mantiene el anterior");
+                    self.notice(format!("{}: {e}", tr("error.theme")));
+                }
+            }
+        }
+        inner.system = sys;
+        self.apply_dwm(&mut inner);
+        let translucent = inner
+            .dwm
+            .is_some_and(|(_, applied)| applied != dwm::Backdrop::Solid);
+        inner.style = look::ui_style(&inner.theme, &inner.system, translucent);
+        let ui = settings::ui(
+            &inner.config,
+            inner.style.clone(),
+            inner.system.animations,
+            inner.system.text_scale,
+        );
+        drop(inner);
+        let _ = self.ui.unbounded_send(UiEvent::Config(ui));
+    }
+
+    /// Vuelve a cargar los textos (al guardar un archivo de la carpeta `lang`, RF-211).
+    pub fn reload_lang(&self) {
+        let language = self.inner().config.general.language.clone();
+        match rukes_core::i18n::set_language(&language, &rukes_platform::sysinfo::user_locale()) {
+            Ok(()) => tracing::info!("textos recargados"),
+            Err(e) => self.notice(format!("{}: {e}", tr("error.lang"))),
+        }
+        // Fuerza un nuevo dibujado con los textos nuevos.
+        let ui = self.ui_config();
+        let _ = self.ui.unbounded_send(UiEvent::Config(ui));
     }
 
     /// Crea los plugins según la config (RF-205: activar/desactivar y prioridad).
@@ -371,11 +468,13 @@ impl AppHost {
         }
         let t = Instant::now();
         self.hide_seq.fetch_add(1, Ordering::SeqCst);
+        // Modo claro/oscuro, contraste alto o escalado pudieron cambiar con la ventana oculta.
+        self.refresh_look(false);
         let (placement, ref_height) = {
             let inner = self.inner();
             (
                 settings::placement(&inner.config),
-                settings::reference_height(&inner.config),
+                settings::reference_height(&inner.config, &inner.style),
             )
         };
         window::place_on_cursor_monitor(hwnd, placement, ref_height);
@@ -424,21 +523,15 @@ impl AppHost {
             }
         };
         tracing::info!("configuración recargada");
-        rukes_core::i18n::set_language(
+        if let Err(e) = rukes_core::i18n::set_language(
             &config.general.language,
             &rukes_platform::sysinfo::user_locale(),
-        );
-        self.engine.set_config(settings::engine(&config));
-        let _ = self
-            .ui
-            .unbounded_send(UiEvent::Config(settings::ui(&config)));
-        let old = std::mem::replace(&mut self.inner().config, config.clone());
-        if old.window.backdrop != config.window.backdrop {
-            let hwnd = self.hwnd.load(Ordering::SeqCst);
-            if hwnd != 0 {
-                dwm::apply(hwnd, settings::backdrop(&config), true);
-            }
+        ) {
+            self.notice(format!("{}: {e}", tr("error.lang")));
         }
+        self.engine.set_config(settings::engine(&config));
+        let old = std::mem::replace(&mut self.inner().config, config.clone());
+        self.refresh_look(true);
         if old.plugins != config.plugins || old.scripts != config.scripts {
             let me = self.me.lock().ok().and_then(|w| w.upgrade());
             if let Some(me) = me {
@@ -571,10 +664,24 @@ impl Host for AppHost {
 
     fn window_ready(&self, hwnd: isize) -> bool {
         self.hwnd.store(hwnd, Ordering::SeqCst);
-        let backdrop = settings::backdrop(&self.inner().config);
-        let applied = dwm::apply(hwnd, backdrop, true);
-        tracing::info!(?applied, "ventana lista");
-        applied != dwm::Backdrop::Solid
+        let mut inner = self.inner();
+        inner.dwm = None;
+        self.apply_dwm(&mut inner);
+        let translucent = inner
+            .dwm
+            .is_some_and(|(_, applied)| applied != dwm::Backdrop::Solid);
+        inner.style.translucent = translucent;
+        tracing::info!(translucent, "ventana lista");
+        // Un `Config` anterior (enviado antes de existir la ventana) diría «sólido».
+        let ui = settings::ui(
+            &inner.config,
+            inner.style.clone(),
+            inner.system.animations,
+            inner.system.text_scale,
+        );
+        drop(inner);
+        let _ = self.ui.unbounded_send(UiEvent::Config(ui));
+        translucent
     }
 
     fn hide(&self) {
@@ -587,7 +694,17 @@ impl Host for AppHost {
             Icon::File(p) => p.to_string_lossy().into_owned(),
             Icon::None | Icon::Named(_) => return None,
         };
-        icons::load(&source, px).map(|i| (i.width, i.height, i.pixels))
+        let key = IconCache::key(&source, px);
+        if let Some(i) = self.icon_cache.get(key) {
+            return Some(i);
+        }
+        let i = icons::load(&source, px).map(|i| (i.width, i.height, i.pixels))?;
+        self.icon_cache.put(key, &i);
+        Some(i)
+    }
+
+    fn preview(&self, path: &std::path::Path) -> Option<Preview> {
+        crate::preview::build(path)
     }
 
     fn shown(&self) {

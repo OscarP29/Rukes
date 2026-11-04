@@ -1,0 +1,166 @@
+# Rukes texts in English. Copy this file to the "lang" folder next to config.toml to change
+# texts, or save it as <code>.toml (e.g. fr.toml) to add a language. {name} is a placeholder.
+
+[action]
+copy_path = "Copy path"
+open = "Open"
+open_location = "Open file location"
+open_with = "Open with…"
+run_as_admin = "Run as administrator"
+terminal_here = "Open terminal here"
+
+[apps]
+name = "Applications"
+packaged = "Store app"
+path = "Executable on PATH"
+
+[calc]
+days = "{n} days"
+enter_copies = "Enter copies"
+name = "Calculator"
+
+[common]
+cancel = "Cancel"
+
+[error]
+action = "The action failed"
+config = "Configuration error"
+hotkey = "Could not register the hotkey"
+lang = "Language file error"
+theme = "Theme error"
+
+[files]
+name = "Files"
+name_dirs = "Folders"
+name_files = "Files only"
+
+[generators]
+b64_decoded = "Base64 decoded"
+hex_decoded = "Hex decoded"
+html_decoded = "HTML decoded"
+lorem = "Lorem ipsum · {n} paragraph(s)"
+name = "Generators"
+no_symbols = "no symbols"
+password = "Password"
+unix_ms = "Unix (milliseconds)"
+unix_s = "Unix (seconds)"
+url_decoded = "URL decoded"
+
+[notify]
+copied = "Copied to clipboard"
+
+[preview]
+app = "Application"
+binary = "Binary file: no text preview"
+file = "{ext} file"
+file_noext = "File"
+folder = "Folder"
+hint = "Ctrl+P hides the preview"
+items = "Items"
+kind = "Type"
+location = "Location"
+modified = "Modified"
+size = "Size"
+unreadable = "Cannot be read"
+
+[processes]
+confirm = "Yes, end {target}"
+confirm_sub = "Unsaved data will be lost"
+count = "{n} processes"
+kill_failed = "Could not end it (requires administrator?)"
+name = "Processes"
+system = "system process"
+target_many = "{name} ({n} processes)"
+tree = "End {target} and its child processes"
+tree_sub = "Process tree"
+
+[scripts]
+ago = "{n} {unit} ago"
+alias = "Alias"
+cancelled = "cancelled"
+cancelling = "Cancelling…"
+copy_output = "Copy output"
+could_not_start = "could not start"
+create = "Create"
+create_script = "Create script"
+detached = "started without capturing output"
+edit = "Edit"
+edit_script = "Edit script"
+enter_cancels = "Enter cancels"
+enter_cancels_esc = "Enter cancels · Esc keeps it running (logs)"
+enter_copies_output = "Enter copies the whole output"
+exit_code = "exit code"
+it_had_already_finished = "It had already finished"
+missing_arguments = "Missing arguments"
+move_to_recycle_bin = "Move to recycle bin"
+new_script = "New script"
+new_script_ellipsis = "New script…"
+new_script_sub = "Create a script from a template"
+no_runs_yet = "No runs yet"
+no_workdir = "working directory not found"
+not_json = "Output is not a JSON result list"
+opens_in_the_editor = "opens in the editor"
+output_shown_in_the_terminal = "(output shown in the terminal)"
+press_enter_to_close = "Press Enter to close"
+run = "Run"
+running = "Running"
+running_ellipsis = "Running…"
+script_no_longer_exists = "script no longer exists"
+search = "Search"
+show_output = "Show output"
+timed_out = "timed out"
+timed_out_title = "Timed out"
+type = "Type"
+yes_move_to_recycle_bin = "Yes, move to recycle bin"
+
+[search]
+no_results = "No results"
+placeholder = "Search apps, files and commands…"
+
+[shell]
+admin_hint = "Ctrl+Enter: as administrator"
+open = "Open {cmd}"
+run = "Run: {cmd}"
+uri = "Shell URI"
+
+[syscmd]
+confirm = "Yes, {what}"
+confirm_sub = "Press Enter to confirm"
+emptybin = "Empty Recycle Bin"
+hibernate = "Hibernate"
+lock = "Lock"
+logoff = "Sign out"
+name = "System"
+restart = "Restart"
+shutdown = "Shut down"
+sleep = "Sleep"
+subtitle = "System command"
+
+[system]
+config = "Open Rukes settings"
+quit = "Quit Rukes"
+quit_sub = "Close the launcher completely"
+reload = "Reload Rukes"
+reload_sub = "Re-index applications"
+
+[templates]
+js = "JavaScript (Node, Deno or Bun)"
+rhai = "Rhai (built in, no dependencies)"
+
+[tray]
+pause = "Pause hotkey"
+quit = "Quit"
+reload = "Reload indexes"
+resume = "Resume hotkey"
+settings = "Settings"
+show = "Show"
+
+[web]
+open = "Open {url}"
+search = "Search {engine} for “{q}”"
+
+[windows]
+gone = "The window no longer exists"
+minimized = "Minimized window"
+name = "Windows"
+open = "Open window"

@@ -1,0 +1,12 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "catppuccin-frappe" y cambia solo lo que quieras.
+[theme]
+name = "Catppuccin Frappé"
+dark = true
+
+[theme.colors]
+background = "#303446"
+foreground = "#c6d0f5"
+accent = "#8caaee"
+selection = "#414559"
+muted = "#838ba7"

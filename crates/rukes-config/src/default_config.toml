@@ -11,6 +11,12 @@ language = "auto"
 start_with_windows = false
 # Terminal para los comandos de shell y «abrir terminal aquí»: "wt" (Windows Terminal) o "none".
 terminal = "wt"
+# Tema: "system" (sigue el modo claro/oscuro de Windows), uno incluido o uno de la carpeta
+# "themes" junto a este archivo. Incluidos: tokyo-night, catppuccin-latte, catppuccin-frappe,
+# catppuccin-macchiato, catppuccin-mocha, gruvbox, nord, dracula, rukes-light.
+theme = "system"
+light_theme = "catppuccin-latte"
+dark_theme = "tokyo-night"
 
 [window]
 # "center" o "top_center".
@@ -22,8 +28,14 @@ hide_on_blur = true
 hide_after_action = true
 # Al mostrar la ventana: "clear", "keep" o "select_all".
 on_show = "select_all"
-# "mica", "acrylic" o "solid".
-backdrop = "mica"
+# "auto" (el del tema), "mica", "acrylic" o "solid". En Windows 10 siempre es sólido.
+backdrop = "auto"
+# Animaciones cortas al aparecer, seleccionar y cambiar de tamaño. También se apagan si Windows
+# tiene desactivadas las animaciones.
+animations = true
+# Panel de previsualización a la derecha (Ctrl+P lo alterna).
+preview_panel = false
+preview_width = 340
 
 [search]
 # Peso del uso frecuente/reciente frente a la coincidencia de texto (0 a 1).

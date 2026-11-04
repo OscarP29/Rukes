@@ -2,7 +2,10 @@
 #![windows_subsystem = "windows"]
 
 mod host;
+mod iconcache;
 mod logging;
+mod look;
+mod preview;
 mod settings;
 mod system_plugin;
 
@@ -10,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rukes_config::paths::Paths;
-use rukes_config::{Config, ConfigWatcher};
+use rukes_config::{Config, ConfigWatcher, DirWatcher};
 use rukes_core::{Engine, Frecency, persist};
 use rukes_platform::instance::{self, Instance};
 use rukes_ui::UiEvent;
@@ -36,10 +39,13 @@ fn main() -> anyhow::Result<()> {
             (Config::default(), Some(e))
         }
     };
-    rukes_core::i18n::set_language(
+    rukes_core::i18n::set_lang_dir(Some(&paths.lang_dir()));
+    if let Err(e) = rukes_core::i18n::set_language(
         &config.general.language,
         &rukes_platform::sysinfo::user_locale(),
-    );
+    ) {
+        tracing::warn!(%e, "archivo de idioma no válido");
+    }
 
     // La UI se crea antes que el atajo para que la segunda instancia pueda pedir «mostrar».
     let ui_tx = rukes_ui::channel();
@@ -65,6 +71,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     host.install_plugins(&config);
+    host.refresh_look(true);
     engine.refresh_all();
     host.start_hotkey(&config.general.hotkey);
     host.start_tray();
@@ -82,6 +89,14 @@ fn main() -> anyhow::Result<()> {
     })
     .inspect_err(|e| tracing::warn!(%e, "no se pudo vigilar config.toml"))
     .ok();
+    let theme_host = Arc::clone(&host);
+    let _themes = DirWatcher::spawn(&paths.themes_dir(), move || theme_host.refresh_look(true))
+        .inspect_err(|e| tracing::warn!(%e, "no se pudo vigilar la carpeta de temas"))
+        .ok();
+    let lang_host = Arc::clone(&host);
+    let _langs = DirWatcher::spawn(&paths.lang_dir(), move || lang_host.reload_lang())
+        .inspect_err(|e| tracing::warn!(%e, "no se pudo vigilar la carpeta de idiomas"))
+        .ok();
 
     let save_engine = Arc::clone(&engine);
     let frecency_file = paths.frecency_file();
@@ -104,7 +119,7 @@ fn main() -> anyhow::Result<()> {
         "listo"
     );
 
-    let ui_config = settings::ui(&config);
+    let ui_config = host.ui_config();
     let result = rukes_ui::run(host.clone(), ui_tx, ui_config);
     host.shutdown();
     result.map_err(|e| anyhow::anyhow!("error de la UI: {e}"))

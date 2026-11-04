@@ -6,7 +6,8 @@ use windows::Win32::Graphics::Gdi::{
     DeleteObject, GetDIBits, GetObjectW, HGDIOBJ,
 };
 use windows::Win32::UI::Shell::{
-    IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK, SIIGBF_ICONONLY,
+    IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF, SIIGBF_BIGGERSIZEOK,
+    SIIGBF_ICONONLY, SIIGBF_THUMBNAILONLY,
 };
 use windows::core::PCWSTR;
 
@@ -24,6 +25,16 @@ pub struct Rgba {
 /// Icono de un archivo, acceso directo o `shell:` URI al tamaño pedido (en píxeles físicos).
 /// Debe llamarse fuera del hilo de UI: puede tardar varios milisegundos.
 pub fn load(source: &str, size: u32) -> Option<Rgba> {
+    image(source, size, SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK)
+}
+
+/// Miniatura de un archivo (imágenes, vídeos, PDF... según los proveedores instalados) que
+/// cabe en `size`×`size` conservando la proporción. `None` si el archivo no tiene miniatura.
+pub fn thumbnail(path: &str, size: u32) -> Option<Rgba> {
+    image(path, size, SIIGBF_THUMBNAILONLY)
+}
+
+fn image(source: &str, size: u32, flags: SIIGBF) -> Option<Rgba> {
     crate::com::ensure_thread();
     let name = crate::wide(source);
     let size_i = i32::try_from(size).ok()?;
@@ -38,7 +49,7 @@ pub fn load(source: &str, size: u32) -> Option<Rgba> {
                     cx: size_i,
                     cy: size_i,
                 },
-                SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK,
+                flags,
             )
             .ok()?;
         let obj = HGDIOBJ(hbmp.0);

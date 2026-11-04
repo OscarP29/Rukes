@@ -1,28 +1,44 @@
 //! Aplicación iced: estado, mensajes, actualización y vista.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt as _, StreamExt as _};
 use iced::keyboard::{self, Key, Modifiers, key::Named};
-use iced::widget::text::Wrapping;
+use iced::widget::text::{Shaping, Wrapping};
 use iced::widget::{
-    Id, column, container, image, mouse_area, operation, row, space, text, text_input,
+    Id, column, container, image, mouse_area, operation, rich_text, row, space, span, text,
+    text_input,
 };
 use iced::{
-    Background, Border, Color, Element, Event, Font, Length, Size, Subscription, Task, event,
-    mouse, window,
+    Background, Border, Color, ContentFit, Element, Event, Length, Size, Subscription, Task, event,
+    font, mouse, window,
 };
 use rukes_core::i18n::tr;
 use rukes_core::{ActionId, ActionOutcome, Icon, QueryBatch, QueryId, ResultItem, ranking};
 
-use crate::theme;
-use crate::{Host, OnShow, UiConfig, UiEvent, UiSender};
+use crate::theme::{self, Look};
+use crate::{Host, OnShow, Preview, UiConfig, UiEvent, UiSender};
 
 /// Resultados que se conservan en memoria (la vista muestra `max_results`).
 const KEEP_RESULTS: usize = 200;
-const FONT: Font = Font::with_name("Segoe UI Variable Text");
+/// Iconos en memoria; al pasar de aquí se vacía la caché (los del disco cargan rápido).
+const KEEP_ICONS: usize = 512;
+/// Previsualizaciones en memoria.
+const KEEP_PREVIEWS: usize = 48;
+/// Duraciones de las animaciones (RF-195: 80–150 ms).
+const FADE: Duration = Duration::from_millis(110);
+const SELECT: Duration = Duration::from_millis(90);
+const RESIZE: Duration = Duration::from_millis(100);
+/// Fotogramas extra tras redimensionar.
+const SETTLE: Duration = Duration::from_millis(120);
+/// Filas mínimas con el panel de previsualización abierto (para que quepa).
+const PREVIEW_ROWS: usize = 6;
+/// Líneas de texto en la previsualización.
+const PREVIEW_LINES: usize = 40;
 
 fn input_id() -> Id {
     Id::new("search")
@@ -38,15 +54,53 @@ enum Message {
     Scrolled(f32),
     ActionDone(Result<ActionOutcome, String>),
     IconLoaded(Icon, Option<image::Handle>),
+    PreviewLoaded(PathBuf, Option<Arc<Loaded>>),
+    Frame(Instant),
     Unfocused,
+}
+
+/// Previsualización con la imagen ya convertida para iced.
+#[derive(Debug)]
+struct Loaded {
+    preview: Preview,
+    image: Option<image::Handle>,
+}
+
+/// Animación en curso.
+#[derive(Debug, Clone, Copy)]
+struct Anim {
+    start: Instant,
+    dur: Duration,
+}
+
+impl Anim {
+    fn new(dur: Duration) -> Self {
+        Self {
+            start: Instant::now(),
+            dur,
+        }
+    }
+
+    /// Progreso 0..1 con salida suave (ease-out cúbico).
+    fn at(&self, now: Instant) -> f32 {
+        let t = now.saturating_duration_since(self.start).as_secs_f32() / self.dur.as_secs_f32();
+        let t = t.clamp(0.0, 1.0);
+        1.0 - (1.0 - t).powi(3)
+    }
+
+    fn done(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.start) >= self.dur
+    }
 }
 
 struct State {
     host: Arc<dyn Host>,
     tx: UiSender,
     cfg: UiConfig,
+    look: Look,
     window: Option<window::Id>,
     translucent: bool,
+    visible: bool,
     query: String,
     qid: QueryId,
     /// `true` hasta que llegue el primer lote de la consulta actual: entonces se sustituyen los
@@ -58,7 +112,15 @@ struct State {
     icons: HashMap<Icon, Option<image::Handle>>,
     notice: Option<String>,
     busy: bool,
-    rows_shown: Option<usize>,
+    preview_on: bool,
+    previews: HashMap<PathBuf, Option<Arc<Loaded>>>,
+    /// Tamaño pedido por última vez y tamaño actual (distinto mientras se anima).
+    target: Option<Size>,
+    current: Size,
+    now: Instant,
+    fade: Option<Anim>,
+    select_anim: Option<(usize, Anim)>,
+    resize_anim: Option<(f32, Anim)>,
 }
 
 /// Mueve la selección `delta` posiciones (con vuelta al principio/fin) y ajusta el desplazamiento
@@ -91,33 +153,75 @@ fn scroll_to(sel: usize, offset: usize, len: usize, visible: usize) -> usize {
     off.min(max_off)
 }
 
+/// Texto con modelado avanzado: ligaduras, emoji en color y respaldo de fuentes (RF-197).
+fn txt<'a>(s: impl text::IntoFragment<'a>) -> text::Text<'a> {
+    text(s).shaping(Shaping::Advanced)
+}
+
 impl State {
     fn visible_rows(&self) -> usize {
         self.results.len().min(self.cfg.max_results)
     }
 
-    fn height(&self) -> f32 {
+    /// Filas que ocupa la lista (con el panel abierto, al menos unas cuantas).
+    fn list_rows(&self) -> usize {
         let rows = self.visible_rows();
-        let mut h = theme::SEARCH_H;
+        if self.preview_on && rows > 0 {
+            rows.max(PREVIEW_ROWS.min(self.cfg.max_results))
+        } else {
+            rows
+        }
+    }
+
+    fn width(&self) -> f32 {
+        if self.preview_on {
+            self.cfg.width + 1.0 + self.cfg.preview_width
+        } else {
+            self.cfg.width
+        }
+    }
+
+    fn height(&self) -> f32 {
+        let rows = self.list_rows();
+        let mut h = self.look.search_h;
         if rows > 0 {
-            h += 1.0 + rows as f32 * theme::ROW_H + theme::LIST_PAD * 2.0;
+            h += 1.0 + rows as f32 * self.look.row_h + theme::LIST_PAD * 2.0;
         }
         if self.notice.is_some() {
             h += theme::NOTICE_H;
         }
-        h
+        h.round()
+    }
+
+    fn animating(&self) -> bool {
+        self.fade.is_some() || self.select_anim.is_some() || self.resize_anim.is_some()
     }
 
     fn resize(&mut self) -> Task<Message> {
         let Some(id) = self.window else {
             return Task::none();
         };
-        let key = self.visible_rows() + if self.notice.is_some() { 1000 } else { 0 };
-        if self.rows_shown == Some(key) {
+        let target = Size::new(self.width(), self.height());
+        if self.target == Some(target) {
             return Task::none();
         }
-        self.rows_shown = Some(key);
-        window::resize(id, Size::new(self.cfg.width, self.height()))
+        self.target = Some(target);
+        // Solo se anima la altura con la ventana visible y el mismo ancho.
+        if self.cfg.animations
+            && self.visible
+            && (self.current.width - target.width).abs() < 0.5
+            && (self.current.height - target.height).abs() >= 1.0
+        {
+            self.resize_anim = Some((self.current.height, Anim::new(RESIZE)));
+            return Task::none();
+        }
+        self.resize_anim = None;
+        self.current = target;
+        window::resize(id, target)
+    }
+
+    fn set_style(&mut self) {
+        self.look = Look::new(&self.cfg.style, self.translucent);
     }
 
     fn run_query(&mut self) -> Task<Message> {
@@ -141,7 +245,11 @@ impl State {
     }
 
     fn load_visible_icons(&mut self) -> Task<Message> {
+        if self.icons.len() > KEEP_ICONS {
+            self.icons.clear();
+        }
         let end = (self.offset + self.cfg.max_results).min(self.results.len());
+        let px = self.look.icon_px();
         let mut tasks = Vec::new();
         for item in &self.results[self.offset..end] {
             if matches!(item.icon, Icon::None) || self.icons.contains_key(&item.icon) {
@@ -153,7 +261,7 @@ impl State {
             tasks.push(Task::perform(
                 async move {
                     let h = host
-                        .icon(&icon, theme::ICON_PX)
+                        .icon(&icon, px)
                         .map(|(w, h, px)| image::Handle::from_rgba(w, h, px));
                     (icon, h)
                 },
@@ -161,6 +269,50 @@ impl State {
             ));
         }
         Task::batch(tasks)
+    }
+
+    fn load_preview(&mut self) -> Task<Message> {
+        if !self.preview_on {
+            return Task::none();
+        }
+        let Some(path) = self
+            .results
+            .get(self.selected)
+            .and_then(|i| i.preview.clone())
+        else {
+            return Task::none();
+        };
+        if self.previews.contains_key(&path) {
+            return Task::none();
+        }
+        if self.previews.len() > KEEP_PREVIEWS {
+            self.previews.clear();
+        }
+        self.previews.insert(path.clone(), None);
+        let host = Arc::clone(&self.host);
+        Task::perform(
+            async move {
+                let loaded = host.preview(&path).map(|p| {
+                    let image = p
+                        .image
+                        .clone()
+                        .map(|(w, h, px)| image::Handle::from_rgba(w, h, px));
+                    Arc::new(Loaded { preview: p, image })
+                });
+                (path, loaded)
+            },
+            |(p, l)| Message::PreviewLoaded(p, l),
+        )
+    }
+
+    /// Cambia la selección (con animación) y carga lo que haga falta.
+    fn select(&mut self, sel: usize, offset: usize) -> Task<Message> {
+        if sel != self.selected && self.cfg.animations && self.visible {
+            self.select_anim = Some((self.selected, Anim::new(SELECT)));
+        }
+        self.selected = sel;
+        self.offset = offset;
+        Task::batch([self.load_visible_icons(), self.load_preview()])
     }
 
     fn execute(&mut self, idx: usize, action: &str) -> Task<Message> {
@@ -181,6 +333,9 @@ impl State {
     }
 
     fn hide(&mut self) {
+        self.visible = false;
+        self.fade = None;
+        self.select_anim = None;
         self.host.hide();
     }
 
@@ -192,7 +347,11 @@ impl State {
         self.selected = 0;
         self.offset = 0;
         self.stale = false;
-        Task::batch([self.load_visible_icons(), self.resize()])
+        Task::batch([
+            self.load_visible_icons(),
+            self.load_preview(),
+            self.resize(),
+        ])
     }
 
     fn on_shown(&mut self) -> Task<Message> {
@@ -213,9 +372,46 @@ impl State {
                 tasks.push(self.run_query());
             }
         }
-        self.rows_shown = None;
+        // El tamaño se fija sin animar (aún «oculta» para `resize`); luego aparece el contenido.
+        self.target = None;
         tasks.push(self.resize());
+        self.visible = true;
+        if self.cfg.animations {
+            self.fade = Some(Anim::new(FADE));
+            self.now = Instant::now();
+        }
+        tasks.push(self.load_preview());
         Task::batch(tasks)
+    }
+
+    fn on_frame(&mut self, now: Instant) -> Task<Message> {
+        self.now = now;
+        if self.fade.is_some_and(|a| a.done(now)) {
+            self.fade = None;
+        }
+        if self.select_anim.is_some_and(|(_, a)| a.done(now)) {
+            self.select_anim = None;
+        }
+        let (Some((from, a)), Some(target), Some(id)) =
+            (self.resize_anim, self.target, self.window)
+        else {
+            return Task::none();
+        };
+        let h = if a.done(now) {
+            // Se siguen pidiendo fotogramas un poco más: iced a veces no redibuja tras el
+            // último cambio de tamaño de una serie rápida y quedaría una franja sin pintar.
+            if now.saturating_duration_since(a.start) >= RESIZE + SETTLE {
+                self.resize_anim = None;
+            }
+            target.height
+        } else {
+            (from + (target.height - from) * a.at(now)).round()
+        };
+        if (h - self.current.height).abs() < 0.5 {
+            return Task::none();
+        }
+        self.current = Size::new(target.width, h);
+        window::resize(id, self.current)
     }
 }
 
@@ -225,6 +421,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
             s.window = Some(id);
             if let Some(h) = hwnd {
                 s.translucent = s.host.window_ready(h);
+                s.set_style();
             }
             s.resize()
         }
@@ -235,10 +432,25 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 Task::none()
             }
             UiEvent::Config(c) => {
+                let icons_changed = (c.style.icon_size - s.cfg.style.icon_size).abs() > 0.1;
+                let panel_changed = c.preview_panel != s.cfg.preview_panel;
+                if s.window.is_some() {
+                    s.translucent = c.style.translucent;
+                }
                 s.cfg = c;
-                s.rows_shown = None;
+                s.set_style();
+                if icons_changed {
+                    s.icons.clear();
+                }
+                if panel_changed {
+                    s.preview_on = s.cfg.preview_panel;
+                }
+                if !s.cfg.animations {
+                    s.fade = None;
+                    s.select_anim = None;
+                }
                 s.offset = scroll_to(s.selected, s.offset, s.results.len(), s.cfg.max_results);
-                s.resize()
+                Task::batch([s.resize(), s.load_visible_icons(), s.load_preview()])
             }
             UiEvent::Notice(n) => {
                 s.notice = Some(n);
@@ -256,7 +468,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 }
                 ranking::merge(&mut s.results, b.items, KEEP_RESULTS);
                 s.selected = s.selected.min(s.results.len().saturating_sub(1));
-                Task::batch([s.load_visible_icons(), s.resize()])
+                Task::batch([s.load_visible_icons(), s.load_preview(), s.resize()])
             }
             UiEvent::Results { replaces, items } => {
                 if s.results.first().map(ResultItem::key).as_deref() != Some(&replaces) {
@@ -274,8 +486,8 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
             let visible = s.cfg.max_results;
             let len = s.results.len();
             let mv = |s: &mut State, d: isize| {
-                (s.selected, s.offset) = move_selection(s.selected, s.offset, len, visible, d);
-                s.load_visible_icons()
+                let (sel, off) = move_selection(s.selected, s.offset, len, visible, d);
+                s.select(sel, off)
             };
             match key.as_ref() {
                 Key::Named(Named::Escape) => {
@@ -310,27 +522,31 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 }
                 Key::Character("e") if m.control() => s.execute(s.selected, ActionId::EDIT),
                 Key::Character("d") if m.control() => s.execute(s.selected, ActionId::DELETE),
+                Key::Character("p") if m.control() => {
+                    s.preview_on = !s.preview_on;
+                    Task::batch([s.resize(), s.load_preview()])
+                }
                 _ => Task::none(),
             }
         }
         Message::Clicked(i) => {
-            s.selected = i;
+            let off = s.offset;
+            let load = s.select(i, off);
             let action = s
                 .results
                 .get(i)
                 .and_then(|r| r.actions.first())
                 .map(|a| a.id.0.clone())
                 .unwrap_or_default();
-            s.execute(i, &action)
+            Task::batch([load, s.execute(i, &action)])
         }
         Message::Scrolled(lines) => {
             let max_off = s.results.len().saturating_sub(s.cfg.max_results);
             let off = (s.offset as f32 - lines).round().clamp(0.0, max_off as f32) as usize;
-            s.offset = off;
-            s.selected = s
+            let sel = s
                 .selected
                 .clamp(off, off + s.cfg.max_results.saturating_sub(1));
-            s.load_visible_icons()
+            s.select(sel, off)
         }
         Message::ActionDone(res) => {
             s.busy = false;
@@ -363,6 +579,11 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::PreviewLoaded(path, loaded) => {
+            s.previews.insert(path, loaded);
+            Task::none()
+        }
+        Message::Frame(now) => s.on_frame(now),
         Message::Unfocused => {
             if s.cfg.hide_on_blur && !s.busy {
                 s.hide();
@@ -373,7 +594,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
 }
 
 /// Icono de texto para los plugins integrados (`Icon::Named`).
-fn glyph<'a>(name: &str) -> Element<'a, Message> {
+fn glyph<'a>(l: &Look, name: &str) -> Element<'a, Message> {
     let symbol = match name {
         "calc" => "=",
         "web" => "@",
@@ -391,20 +612,21 @@ fn glyph<'a>(name: &str) -> Element<'a, Message> {
         "ok" => "ok",
         _ => "·",
     };
+    let (bg, radius) = (l.selection, (l.radius - 2.0).max(0.0));
     container(
         text(symbol)
-            .size(13)
-            .font(Font::MONOSPACE)
-            .color(theme::ACCENT),
+            .size((l.icon * 0.46).round())
+            .font(l.mono)
+            .color(l.accent),
     )
-    .width(theme::ICON)
-    .height(theme::ICON)
-    .center_x(theme::ICON)
-    .center_y(theme::ICON)
-    .style(|_| container::Style {
-        background: Some(Background::Color(theme::SELECTION)),
+    .width(l.icon)
+    .height(l.icon)
+    .center_x(l.icon)
+    .center_y(l.icon)
+    .style(move |_| container::Style {
+        background: Some(Background::Color(bg)),
         border: Border {
-            radius: 6.0.into(),
+            radius: radius.into(),
             ..Border::default()
         },
         ..container::Style::default()
@@ -412,43 +634,70 @@ fn glyph<'a>(name: &str) -> Element<'a, Message> {
     .into()
 }
 
-fn result_row<'a>(s: &'a State, i: usize, item: &'a ResultItem) -> Element<'a, Message> {
+/// Opacidad del fondo de selección de la fila `i` (anima el cambio de fila).
+fn selection_alpha(s: &State, i: usize) -> f32 {
+    match s.select_anim {
+        Some((prev, a)) => {
+            let t = a.at(s.now);
+            if i == s.selected {
+                t
+            } else if i == prev {
+                1.0 - t
+            } else {
+                0.0
+            }
+        }
+        None => f32::from(u8::from(i == s.selected)),
+    }
+}
+
+fn result_row<'a>(s: &'a State, l: &Look, i: usize, item: &'a ResultItem) -> Element<'a, Message> {
+    let fade = s.fade.map_or(1.0, |a| a.at(s.now));
     let icon: Element<'_, Message> = match s.icons.get(&item.icon) {
         Some(Some(h)) => image(h.clone())
-            .width(theme::ICON)
-            .height(theme::ICON)
+            .width(l.icon)
+            .height(l.icon)
+            .opacity(fade)
             .into(),
         _ => match &item.icon {
-            Icon::Named(name) => glyph(name),
-            _ => space().width(theme::ICON).height(theme::ICON).into(),
+            Icon::Named(name) => glyph(l, name),
+            _ => space().width(l.icon).height(l.icon).into(),
         },
     };
+    let sel = selection_alpha(s, i);
+    let selected = sel > 0.5;
     let texts = column![
-        text(item.title.as_str())
-            .size(15)
-            .color(theme::FG)
+        txt(item.title.as_str())
+            .size(l.size)
+            .font(l.font)
+            .color(if selected { l.sel_fg } else { l.fg })
             .wrapping(Wrapping::None),
-        text(item.subtitle.as_str())
-            .size(12.5)
-            .color(theme::MUTED)
+        txt(item.subtitle.as_str())
+            .size(l.small())
+            .font(l.font)
+            .color(if selected { l.sel_muted } else { l.muted })
             .wrapping(Wrapping::None),
     ]
     .spacing(1);
-    let selected = i == s.selected;
+    let bg = Color {
+        a: l.selection.a * sel,
+        ..l.selection
+    };
+    let radius = l.radius;
     let body = container(
         row![icon, texts]
-            .spacing(12)
+            .spacing(l.spacing)
             .align_y(iced::Alignment::Center),
     )
-    .padding([0, 12])
+    .padding([0.0, l.pad])
     .width(Length::Fill)
-    .height(theme::ROW_H)
+    .height(l.row_h)
     .align_y(iced::alignment::Vertical::Center)
     .clip(true)
     .style(move |_| container::Style {
-        background: selected.then_some(Background::Color(theme::SELECTION)),
+        background: (sel > 0.0).then_some(Background::Color(bg)),
         border: Border {
-            radius: 8.0.into(),
+            radius: radius.into(),
             ..Border::default()
         },
         ..container::Style::default()
@@ -459,34 +708,187 @@ fn result_row<'a>(s: &'a State, i: usize, item: &'a ResultItem) -> Element<'a, M
         .into()
 }
 
+/// Markdown sencillo: títulos, viñetas y bloques de código (RF-017). Se dibuja como un solo
+/// texto enriquecido (un widget por línea se recortaba al ajustar líneas largas).
+fn markdown<'a>(l: &Look, src: &str) -> Element<'a, Message> {
+    let mut spans: Vec<text::Span<'a, (), iced::Font>> = Vec::new();
+    let mut code = false;
+    let bold = iced::Font {
+        weight: font::Weight::Semibold,
+        ..l.font
+    };
+    for line in src.lines().take(PREVIEW_LINES) {
+        let t = line.trim_end();
+        if t.trim_start().starts_with("```") {
+            code = !code;
+            continue;
+        }
+        let span = if code {
+            span(format!(
+                "{t}
+"
+            ))
+            .font(l.mono)
+            .size(l.small() - 0.5)
+            .color(l.fg)
+        } else if let Some(h) = t.strip_prefix('#') {
+            let level = 1 + h.chars().take_while(|c| *c == '#').count();
+            let h = h.trim_start_matches('#').trim();
+            span(format!(
+                "{h}
+"
+            ))
+            .font(bold)
+            .size(l.size + (4.0 - level as f32).max(0.0))
+            .color(l.fg)
+        } else if let Some(b) = t
+            .trim_start()
+            .strip_prefix("- ")
+            .or_else(|| t.trim_start().strip_prefix("* "))
+        {
+            span(format!(
+                "•  {}
+",
+                b.replace("**", "").replace('`', "")
+            ))
+            .font(l.font)
+            .size(l.small())
+            .color(l.fg)
+        } else {
+            span(format!(
+                "{}
+",
+                t.replace("**", "").replace('`', "")
+            ))
+            .font(l.font)
+            .size(l.small())
+            .color(l.muted)
+        };
+        spans.push(span);
+    }
+    rich_text(spans).width(Length::Fill).into()
+}
+
+fn preview_panel<'a>(s: &'a State, l: &Look) -> Element<'a, Message> {
+    let mut col = column![].spacing(10).width(Length::Fill);
+    let item = s.results.get(s.selected);
+    let loaded = item
+        .and_then(|i| i.preview.as_ref())
+        .and_then(|p| s.previews.get(p))
+        .and_then(Option::as_ref);
+    if let Some(item) = item {
+        if let Some(h) = loaded.and_then(|p| p.image.as_ref()) {
+            col = col.push(
+                container(
+                    image(h.clone())
+                        .content_fit(ContentFit::Contain)
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                )
+                .height(Length::Fixed(
+                    (s.cfg.preview_width * 0.6).min(l.row_h * 4.0),
+                ))
+                .center_x(Length::Fill),
+            );
+        }
+        col = col.push(
+            txt(item.title.as_str())
+                .size(l.size)
+                .font(iced::Font {
+                    weight: font::Weight::Semibold,
+                    ..l.font
+                })
+                .color(l.fg),
+        );
+        match loaded {
+            Some(p) => {
+                for (k, v) in &p.preview.info {
+                    col = col.push(
+                        column![
+                            txt(k.as_str()).size(l.small() - 1.0).color(l.muted),
+                            txt(v.as_str()).size(l.small()).color(l.fg),
+                        ]
+                        .spacing(1),
+                    );
+                }
+                if let Some(t) = &p.preview.text {
+                    let body: Element<'_, Message> = if p.preview.markdown {
+                        markdown(l, t)
+                    } else {
+                        txt(t.as_str())
+                            .font(l.mono)
+                            .size(l.small() - 0.5)
+                            .color(l.fg)
+                            .into()
+                    };
+                    let line = l.divider;
+                    col = col.push(container(space().height(1).width(Length::Fill)).style(
+                        move |_| container::Style {
+                            background: Some(Background::Color(line)),
+                            ..container::Style::default()
+                        },
+                    ));
+                    col = col.push(body);
+                }
+            }
+            None if item.preview.is_none() => {
+                if !item.subtitle.is_empty() {
+                    col = col.push(txt(item.subtitle.as_str()).size(l.small()).color(l.muted));
+                }
+                col = col.push(txt(tr("preview.hint")).size(l.small() - 1.0).color(l.muted));
+            }
+            None => {}
+        }
+    }
+    container(col)
+        .padding([theme::LIST_PAD + 6.0, l.pad + 4.0])
+        .width(s.cfg.preview_width)
+        .height(Length::Fill)
+        .clip(true)
+        .into()
+}
+
+fn divider<'a>(c: Color, vertical: bool) -> Element<'a, Message> {
+    let line = if vertical {
+        space().width(1).height(Length::Fill)
+    } else {
+        space().height(1).width(Length::Fill)
+    };
+    container(line)
+        .style(move |_| container::Style {
+            background: Some(Background::Color(c)),
+            ..container::Style::default()
+        })
+        .into()
+}
+
 fn view(s: &State) -> Element<'_, Message> {
+    let fade = s.fade.map_or(1.0, |a| a.at(s.now));
+    let l = s.look.faded(fade);
+    let (fg, muted, accent) = (l.fg, l.muted, l.accent);
     let input = text_input(tr("search.placeholder"), &s.query)
         .id(input_id())
         .on_input(Message::Input)
-        .size(20)
-        .padding([16, 20])
-        .font(FONT)
-        .style(|_, _| text_input::Style {
+        .size(l.input_size())
+        .padding([((l.search_h - l.input_size() * 1.3) / 2.0).max(4.0), 20.0])
+        .font(l.font)
+        .style(move |_, _| text_input::Style {
             background: Background::Color(Color::TRANSPARENT),
             border: Border::default(),
-            icon: theme::MUTED,
-            placeholder: theme::MUTED,
-            value: theme::FG,
-            selection: Color {
-                a: 0.45,
-                ..theme::ACCENT
-            },
+            icon: muted,
+            placeholder: muted,
+            value: fg,
+            selection: Color { a: 0.45, ..accent },
         });
 
-    let mut col = column![container(input).height(theme::SEARCH_H)];
+    let mut col = column![
+        container(input)
+            .height(l.search_h)
+            .align_y(iced::alignment::Vertical::Center)
+    ];
     let rows = s.visible_rows();
     if rows > 0 {
-        col = col.push(container(space().height(1).width(Length::Fill)).style(|_| {
-            container::Style {
-                background: Some(Background::Color(theme::DIVIDER)),
-                ..container::Style::default()
-            }
-        }));
+        col = col.push(divider(l.divider, false));
         let list = s
             .results
             .iter()
@@ -494,31 +896,45 @@ fn view(s: &State) -> Element<'_, Message> {
             .skip(s.offset)
             .take(rows)
             .fold(column![].spacing(0), |c, (i, item)| {
-                c.push(result_row(s, i, item))
+                c.push(result_row(s, &l, i, item))
             });
-        col = col.push(
-            mouse_area(container(list).padding([theme::LIST_PAD, 8.0])).on_scroll(|d| {
-                Message::Scrolled(match d {
-                    mouse::ScrollDelta::Lines { y, .. } => y,
-                    mouse::ScrollDelta::Pixels { y, .. } => y / theme::ROW_H,
-                })
-            }),
-        );
+        let row_h = l.row_h;
+        let list = mouse_area(
+            container(list)
+                .padding([theme::LIST_PAD, 8.0])
+                .width(s.cfg.width)
+                .height(Length::Fill),
+        )
+        .on_scroll(move |d| {
+            Message::Scrolled(match d {
+                mouse::ScrollDelta::Lines { y, .. } => y,
+                mouse::ScrollDelta::Pixels { y, .. } => y / row_h,
+            })
+        });
+        if s.preview_on {
+            col = col.push(
+                row![list, divider(l.divider, true), preview_panel(s, &l)]
+                    .height(s.list_rows() as f32 * l.row_h + theme::LIST_PAD * 2.0),
+            );
+        } else {
+            col = col.push(list);
+        }
     }
     if let Some(n) = &s.notice {
         col = col.push(
-            container(text(n.as_str()).size(12.5).color(theme::MUTED))
+            container(txt(n.as_str()).size(l.small()).color(l.muted))
                 .padding([6, 20])
                 .height(theme::NOTICE_H),
         );
     }
-    let bg = theme::background(s.translucent);
+    let bg = l.bg;
     container(col)
         .width(Length::Fill)
         .height(Length::Fill)
+        .clip(true)
         .style(move |_| container::Style {
             background: Some(Background::Color(bg)),
-            text_color: Some(theme::FG),
+            text_color: Some(fg),
             ..container::Style::default()
         })
         .into()
@@ -548,22 +964,31 @@ fn on_event(ev: Event, _status: event::Status, _id: window::Id) -> Option<Messag
     }
 }
 
-fn subscription(_: &State) -> Subscription<Message> {
-    Subscription::batch([
+fn subscription(s: &State) -> Subscription<Message> {
+    let mut subs = vec![
         Subscription::run(inbox_stream),
         event::listen_with(on_event),
-    ])
+    ];
+    // Solo se piden fotogramas mientras hay una animación: en reposo, ningún coste.
+    if s.animating() {
+        subs.push(window::frames().map(Message::Frame));
+    }
+    Subscription::batch(subs)
 }
 
 pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::Result {
-    let width = config.width;
+    let look = Look::new(&config.style, false);
+    let initial = Size::new(config.width, look.search_h);
     let boot = move || {
         let state = State {
             host: Arc::clone(&host),
             tx: tx.clone(),
+            preview_on: config.preview_panel,
             cfg: config.clone(),
+            look,
             window: None,
             translucent: false,
+            visible: false,
             query: String::new(),
             qid: QueryId::default(),
             stale: false,
@@ -573,7 +998,13 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
             icons: HashMap::new(),
             notice: None,
             busy: false,
-            rows_shown: None,
+            previews: HashMap::new(),
+            target: None,
+            current: initial,
+            now: Instant::now(),
+            fade: None,
+            select_anim: None,
+            resize_anim: None,
         };
         let ready = window::oldest().then(|id| {
             let Some(id) = id else { return Task::none() };
@@ -592,9 +1023,9 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
     iced::application(boot, update, view)
         .title("Rukes")
         .subscription(subscription)
-        .default_font(FONT)
+        .default_font(look.font)
         .window(window::Settings {
-            size: Size::new(width, theme::SEARCH_H),
+            size: initial,
             position: window::Position::Centered,
             visible: false,
             decorations: false,
@@ -608,9 +1039,9 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
             },
             ..Default::default()
         })
-        .style(|_, _| iced::theme::Style {
+        .style(move |_, _| iced::theme::Style {
             background_color: Color::TRANSPARENT,
-            text_color: theme::FG,
+            text_color: look.fg,
         })
         .run()
 }
@@ -635,5 +1066,16 @@ mod tests {
         assert_eq!(scroll_to(3, 5, 20, 8), 3);
         assert_eq!(scroll_to(15, 0, 20, 8), 8);
         assert_eq!(scroll_to(4, 0, 5, 8), 0);
+    }
+
+    #[test]
+    fn animations_ease_and_finish() {
+        let a = Anim::new(Duration::from_millis(100));
+        assert_eq!(a.at(a.start), 0.0);
+        let mid = a.at(a.start + Duration::from_millis(50));
+        assert!(mid > 0.5 && mid < 1.0, "{mid}");
+        assert_eq!(a.at(a.start + Duration::from_millis(200)), 1.0);
+        assert!(a.done(a.start + Duration::from_millis(100)));
+        assert!(!a.done(a.start + Duration::from_millis(99)));
     }
 }

@@ -52,9 +52,65 @@ impl ConfigWatcher {
     }
 }
 
+/// Vigila una carpeta (temas, idiomas) y llama a `on_change` cuando cambia algún `.toml`.
+pub struct DirWatcher {
+    _watcher: notify::RecommendedWatcher,
+}
+
+impl DirWatcher {
+    /// Crea la carpeta si no existe y la vigila (sin subcarpetas).
+    pub fn spawn(dir: &Path, on_change: impl Fn() + Send + 'static) -> notify::Result<Self> {
+        let _ = std::fs::create_dir_all(dir);
+        let (tx, rx) = crossbeam_channel::unbounded::<()>();
+        let mut watcher = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
+            if let Ok(ev) = ev
+                && ev.paths.iter().any(|p| {
+                    p.extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("toml"))
+                })
+            {
+                let _ = tx.send(());
+            }
+        })?;
+        watcher.watch(dir, RecursiveMode::NonRecursive)?;
+        std::thread::Builder::new()
+            .name("rukes-dir-watch".into())
+            .spawn(move || {
+                while rx.recv().is_ok() {
+                    while rx.recv_timeout(DEBOUNCE).is_ok() {}
+                    on_change();
+                }
+            })
+            .map_err(|e| notify::Error::generic(&e.to_string()))?;
+        Ok(Self { _watcher: watcher })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dir_watcher_sees_toml_changes() {
+        let dir = std::env::temp_dir().join(format!("rukes-dirwatch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let _w = DirWatcher::spawn(&dir, move || {
+            let _ = tx.send(());
+        })
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        std::fs::write(dir.join("notas.txt"), "x").unwrap();
+        assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
+        std::fs::write(
+            dir.join("mio.toml"),
+            "[theme]
+",
+        )
+        .unwrap();
+        assert!(rx.recv_timeout(Duration::from_secs(3)).is_ok());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn reloads_on_save_and_reports_errors() {

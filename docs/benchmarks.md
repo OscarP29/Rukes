@@ -111,3 +111,23 @@ Binario `rukes.exe` release: **12,2 MB** (8,5 MB en la fase 2; Rhai añade ~3,7 
   listas largas llegó a 40 MB; el working set vuelve a ~2–7 MB al ocultar.
 - Las medidas se tomaron con una copia portable (`portable.txt`) para no tocar la configuración
   del usuario.
+
+## Fase 4: temas, previsualización e i18n (2026-11-04)
+
+Binario `rukes.exe` release: **12,6 MB** (12,2 MB en la fase 3).
+
+| Métrica | Objetivo | Medido | Estado |
+| --- | --- | --- | --- |
+| RNF-001 RAM en reposo (oculta) | ≤ 20 MB working set | **1,8 MB WS** tras recorte · 21,8 MB privada | ✅ |
+| RNF-005 Arranque hasta «listo» | ≤ 300 ms | 106–108 ms (219 ms con el binario recién copiado) | ✅ |
+| Carga del tema | — | ~3 ms | — |
+| Animaciones | 80–150 ms | aparecer 110 ms · selección 90 ms · tamaño 100 ms | ✅ |
+
+**Notas:**
+
+- El arranque sube respecto a la fase 3 (61–66 ms). El tema solo suma ~3 ms; el resto se
+  reparte entre configuración, plugins, bandeja y los dos vigilantes de carpetas nuevos
+  (`themes`, `lang`). No se ha aislado la causa; sigue muy por debajo del objetivo.
+- En reposo no se piden fotogramas: la suscripción a `window::frames()` solo existe mientras
+  hay una animación.
+- Medido con una copia portable (`portable.txt`) para no tocar la configuración del usuario.

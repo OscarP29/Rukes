@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rukes_core::i18n::{Lang as UiLang, language};
+use rukes_core::i18n::{tr, trf};
 use rukes_core::{
     Action, ActionId, ActionOutcome, CancelToken, Fuzzy, Icon, Plugin, PluginError, PluginMetadata,
     Query, ResultItem,
@@ -40,13 +40,6 @@ const FILTER_DEBOUNCE: Duration = Duration::from_millis(150);
 const FILTER_TIMEOUT: Duration = Duration::from_secs(5);
 /// Líneas de salida que se muestran en el launcher.
 const MAX_LINES: usize = 200;
-
-fn t(es: &'static str, en: &'static str) -> &'static str {
-    match language() {
-        UiLang::Es => es,
-        UiLang::En => en,
-    }
-}
 
 /// Ajustes del plugin.
 #[derive(Debug, Clone)]
@@ -114,19 +107,16 @@ fn duration_text(ms: u64) -> String {
 
 fn ago(unix: u64) -> String {
     let s = crate::runs::now_unix().saturating_sub(unix);
-    let (n, es, en) = if s < 60 {
-        (s, "s", "s")
+    let (n, unit) = if s < 60 {
+        (s, "s")
     } else if s < 3600 {
-        (s / 60, "min", "min")
+        (s / 60, "min")
     } else if s < 86_400 {
-        (s / 3600, "h", "h")
+        (s / 3600, "h")
     } else {
-        (s / 86_400, "d", "d")
+        (s / 86_400, "d")
     };
-    match language() {
-        UiLang::Es => format!("hace {n} {es}"),
-        UiLang::En => format!("{n} {en} ago"),
-    }
+    trf("scripts.ago", &[("n", &n), ("unit", &unit)])
 }
 
 fn status_text(r: &Record) -> String {
@@ -135,17 +125,13 @@ fn status_text(r: &Record) -> String {
         Status::Ok => format!("✓ {d}"),
         Status::Failed => format!(
             "✗ {} {} · {d}",
-            t("código", "exit code"),
+            tr("scripts.exit_code"),
             r.code.unwrap_or(-1)
         ),
-        Status::Timeout => format!("⏱ {} · {d}", t("tiempo agotado", "timed out")),
-        Status::Cancelled => format!("■ {} · {d}", t("cancelado", "cancelled")),
-        Status::Error => format!("✗ {}", t("no se pudo lanzar", "could not start")),
-        Status::Detached => t(
-            "lanzado sin capturar la salida",
-            "started without capturing output",
-        )
-        .into(),
+        Status::Timeout => format!("⏱ {} · {d}", tr("scripts.timed_out")),
+        Status::Cancelled => format!("■ {} · {d}", tr("scripts.cancelled")),
+        Status::Error => format!("✗ {}", tr("scripts.could_not_start")),
+        Status::Detached => tr("scripts.detached").into(),
     }
 }
 
@@ -315,13 +301,10 @@ impl ScriptsPlugin {
                 Icon::File,
             );
         let actions = vec![
-            Action::new(ActionId::OPEN, t("Ejecutar", "Run")),
+            Action::new(ActionId::OPEN, tr("scripts.run")),
             Action::new(ActionId::RUN_AS_ADMIN, "action.run_as_admin"),
-            Action::new(ActionId::EDIT, t("Editar", "Edit")),
-            Action::new(
-                ActionId::DELETE,
-                t("Mover a la papelera", "Move to recycle bin"),
-            ),
+            Action::new(ActionId::EDIT, tr("scripts.edit")),
+            Action::new(ActionId::DELETE, tr("scripts.move_to_recycle_bin")),
             Action::new(ActionId::OPEN_LOCATION, "action.open_location"),
             Action::new(ActionId::COPY_PATH, "action.copy_path"),
         ];
@@ -337,7 +320,7 @@ impl ScriptsPlugin {
                 .filter(|a| parsed.missing.contains(&a.name))
                 .map(|a| format!("{} ({})", a.name, a.kind.label()))
                 .collect();
-            format!("{}: {}", t("Escribe", "Type"), missing.join(", "))
+            format!("{}: {}", tr("scripts.type"), missing.join(", "))
         } else if typed {
             parsed
                 .values
@@ -352,7 +335,7 @@ impl ScriptsPlugin {
             s.meta
                 .aliases
                 .first()
-                .map(|a| format!("{} «{a}»", t("Alias", "Alias")))
+                .map(|a| format!("{} «{a}»", tr("scripts.alias")))
                 .unwrap_or_else(|| s.path.to_string_lossy().into_owned())
         };
         if let Some((idx, options)) = &parsed.choices
@@ -379,13 +362,14 @@ impl ScriptsPlugin {
         it.fuzzy = fuzzy;
         it.alias_match = alias.is_some();
         it.actions = actions;
+        it.preview = Some(s.path.clone());
         out.insert(0, it);
         out
     }
 
     fn template_items(&self, name: &str) -> Vec<ResultItem> {
         let shown = if name.is_empty() {
-            t("Nuevo script", "New script").to_owned()
+            tr("scripts.new_script").to_owned()
         } else {
             name.to_owned()
         };
@@ -397,8 +381,8 @@ impl ScriptsPlugin {
                     format!("new:{}", tpl.ext),
                     format!(
                         "{}: {shown} ({})",
-                        t("Crear script", "Create script"),
-                        tpl.label
+                        tr("scripts.create_script"),
+                        tr(tpl.label)
                     ),
                     &json!({"k": "new", "ext": tpl.ext, "name": name}),
                 );
@@ -406,12 +390,12 @@ impl ScriptsPlugin {
                     "{}.{} · {}",
                     templates::slug(&shown),
                     tpl.ext,
-                    t("se abre en el editor", "opens in the editor")
+                    tr("scripts.opens_in_the_editor")
                 );
                 it.icon = Icon::Named("new".into());
                 it.fuzzy = 1.0 - n as f32 * 0.01;
                 it.alias_match = true;
-                it.actions = vec![Action::new(ActionId::OPEN, t("Crear", "Create"))];
+                it.actions = vec![Action::new(ActionId::OPEN, tr("scripts.create"))];
                 it
             })
             .collect()
@@ -432,14 +416,14 @@ impl ScriptsPlugin {
             );
             it.subtitle = format!(
                 "{} ({}) · {}",
-                t("Ejecutando…", "Running…"),
+                tr("scripts.running_ellipsis"),
                 duration_text(r.started.elapsed().as_millis() as u64),
-                t("Enter cancela", "Enter cancels")
+                tr("scripts.enter_cancels")
             );
             it.icon = Icon::Named("running".into());
             it.fuzzy = 1.0 - n as f32 * 0.001;
             it.alias_match = true;
-            it.actions = vec![Action::new(ActionId::OPEN, t("Cancelar", "Cancel"))];
+            it.actions = vec![Action::new(ActionId::OPEN, tr("common.cancel"))];
             out.push(it);
         }
         let base = out.len();
@@ -468,16 +452,16 @@ impl ScriptsPlugin {
             it.fuzzy = 0.99 - (base + n) as f32 * 0.001;
             it.alias_match = true;
             it.actions = vec![
-                Action::new(ActionId::OPEN, t("Ver salida", "Show output")),
-                Action::new(ActionId::COPY_PATH, t("Copiar salida", "Copy output")),
-                Action::new(ActionId::EDIT, t("Editar script", "Edit script")),
+                Action::new(ActionId::OPEN, tr("scripts.show_output")),
+                Action::new(ActionId::COPY_PATH, tr("scripts.copy_output")),
+                Action::new(ActionId::EDIT, tr("scripts.edit_script")),
             ];
             out.push(it);
         }
         if out.is_empty() {
             let mut it = item(
                 "log:none".into(),
-                t("Sin ejecuciones todavía", "No runs yet"),
+                tr("scripts.no_runs_yet"),
                 &json!({"k": "none"}),
             );
             it.icon = Icon::Named("log".into());
@@ -519,7 +503,7 @@ impl ScriptsPlugin {
                     match k {
                         "open" => "action.open",
                         "copy" => "action.copy_path",
-                        _ => t("Buscar", "Search"),
+                        _ => tr("scripts.search"),
                     },
                 )];
                 it
@@ -537,7 +521,7 @@ impl ScriptsPlugin {
                     r.name.clone(),
                     &json!({"k": "none"}),
                 );
-                it.subtitle = t("Sin resultados", "No results").into();
+                it.subtitle = tr("search.no_results").into();
                 v.push(it);
             }
             return v;
@@ -547,11 +531,7 @@ impl ScriptsPlugin {
             format!("{} · {}", r.name, status_text(r)),
             &json!({"k": "copy", "v": r.output()}),
         );
-        head.subtitle = t(
-            "Enter copia toda la salida",
-            "Enter copies the whole output",
-        )
-        .into();
+        head.subtitle = tr("scripts.enter_copies_output").into();
         head.icon = Icon::Named(
             if r.status == Status::Ok {
                 "ok"
@@ -601,14 +581,7 @@ impl ScriptsPlugin {
         let ctx = (self.hooks.context)();
         let cwd = expand_cwd(script);
         if !cwd.is_dir() {
-            return Outcome::error(format!(
-                "{}: {}",
-                t(
-                    "no existe el directorio de trabajo",
-                    "working directory not found"
-                ),
-                cwd.display()
-            ));
+            return Outcome::error(format!("{}: {}", tr("scripts.no_workdir"), cwd.display()));
         }
         let user_args: Vec<String> = values.iter().map(|(_, v)| v.clone()).collect();
         if script.lang == Lang::Rhai {
@@ -647,7 +620,7 @@ impl ScriptsPlugin {
             Ok(l) => l,
             Err(e) => return Outcome::error(e),
         };
-        let pause = t("Pulsa Enter para cerrar", "Press Enter to close");
+        let pause = tr("scripts.press_enter_to_close");
         if admin {
             // La elevación no hereda el entorno: el script envoltorio fija las variables.
             let env = environment(script, self.catalog.dir(), query, values, &ctx, 2000);
@@ -706,7 +679,7 @@ impl ScriptsPlugin {
                 } else {
                     Exit::Code(code)
                 },
-                stdout: t("(salida en la terminal)", "(output shown in the terminal)").into(),
+                stdout: tr("scripts.output_shown_in_the_terminal").into(),
                 stderr: String::new(),
                 items: None,
                 detached: false,
@@ -772,11 +745,7 @@ impl ScriptsPlugin {
                 match rukes_platform::clipboard::set_text(text) {
                     Ok(()) => (self.hooks.notify)(
                         name,
-                        &format!(
-                            "{} · {}",
-                            t("Copiado al portapapeles", "Copied to clipboard"),
-                            ellipsis(text, 80)
-                        ),
+                        &format!("{} · {}", tr("notify.copied"), ellipsis(text, 80)),
                         false,
                     ),
                     Err(e) => (self.hooks.notify)(name, &e.to_string(), true),
@@ -846,16 +815,12 @@ impl ScriptsPlugin {
         if mode == OutputMode::Launcher {
             let mut it = item(
                 format!("run:{}", run.id),
-                format!("{}: {}", t("Ejecutando", "Running"), script.meta.name),
+                format!("{}: {}", tr("scripts.running"), script.meta.name),
                 &json!({"k": "cancel", "id": run.id}),
             );
-            it.subtitle = t(
-                "Enter cancela · Esc la deja en segundo plano (logs)",
-                "Enter cancels · Esc keeps it running (logs)",
-            )
-            .into();
+            it.subtitle = tr("scripts.enter_cancels_esc").into();
             it.icon = Icon::Named("running".into());
-            it.actions = vec![Action::new(ActionId::OPEN, t("Cancelar", "Cancel"))];
+            it.actions = vec![Action::new(ActionId::OPEN, tr("common.cancel"))];
             ActionOutcome::ShowResults(vec![it])
         } else {
             ActionOutcome::Hide
@@ -900,12 +865,8 @@ impl ScriptsPlugin {
                     &json!({"k": "none"}),
                 );
                 it.subtitle = match exit {
-                    Exit::Code(0) => t(
-                        "La salida no es JSON con resultados",
-                        "Output is not a JSON result list",
-                    )
-                    .into(),
-                    Exit::Timeout => t("Tiempo agotado", "Timed out").into(),
+                    Exit::Code(0) => tr("scripts.not_json").into(),
+                    Exit::Timeout => tr("scripts.timed_out_title").into(),
                     _ => last_line(&o.stderr)
                         .map_or_else(|| format!("{exit:?}"), |l| ellipsis(l, 120)),
                 };
@@ -985,21 +946,17 @@ impl Plugin for Scripts {
         }
         if !q.targeted
             && q.text.chars().count() >= 3
-            && let Some(score) = [t("Nuevo script", "New script"), "new script"]
+            && let Some(score) = [tr("scripts.new_script"), "new script"]
                 .iter()
                 .filter_map(|n| f.score(n))
                 .reduce(f32::max)
         {
             let mut it = item(
                 "new".into(),
-                t("Nuevo script…", "New script…"),
+                tr("scripts.new_script_ellipsis"),
                 &json!({"k": "query", "v": format!("{} ", NEW_PHRASES[0])}),
             );
-            it.subtitle = t(
-                "Crea un script desde una plantilla",
-                "Create a script from a template",
-            )
-            .into();
+            it.subtitle = tr("scripts.new_script_sub").into();
             it.icon = Icon::Named("new".into());
             it.fuzzy = score * 0.9;
             out.push(it);
@@ -1035,13 +992,13 @@ impl Plugin for Scripts {
                             "confirm:delete",
                             format!(
                                 "{}: {}",
-                                t("Sí, mover a la papelera", "Yes, move to recycle bin"),
+                                tr("scripts.yes_move_to_recycle_bin"),
                                 path.display()
                             ),
                         );
                         yes.payload = payload(&json!({"k": "delete", "p": path}));
                         yes.icon = Icon::Named("error".into());
-                        let mut no = ResultItem::new("cancel", t("Cancelar", "Cancel"));
+                        let mut no = ResultItem::new("cancel", tr("common.cancel"));
                         no.payload = payload(&json!({"k": "query", "v": ""}));
                         return Ok(ActionOutcome::ShowResults(vec![yes, no]));
                     }
@@ -1051,7 +1008,7 @@ impl Plugin for Scripts {
                 let script = p.catalog.get(&path).ok_or_else(|| {
                     failed(format!(
                         "{}: {}",
-                        t("el script ya no existe", "script no longer exists"),
+                        tr("scripts.script_no_longer_exists"),
                         path.display()
                     ))
                 })?;
@@ -1068,7 +1025,7 @@ impl Plugin for Scripts {
                         ),
                         None => ActionOutcome::Notify(format!(
                             "{}: {}",
-                            t("Faltan argumentos", "Missing arguments"),
+                            tr("scripts.missing_arguments"),
                             parsed.missing.join(", ")
                         )),
                     });
@@ -1101,9 +1058,9 @@ impl Plugin for Scripts {
             "cancel" => {
                 let id = data["id"].as_u64().unwrap_or(0);
                 Ok(if p.runs.cancel(id) {
-                    ActionOutcome::Notify(t("Cancelando…", "Cancelling…").into())
+                    ActionOutcome::Notify(tr("scripts.cancelling").into())
                 } else {
-                    ActionOutcome::Notify(t("Ya había terminado", "It had already finished").into())
+                    ActionOutcome::Notify(tr("scripts.it_had_already_finished").into())
                 })
             }
             "log" => {

@@ -7,6 +7,7 @@
 mod app;
 mod theme;
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use iced::futures::channel::mpsc;
@@ -38,6 +39,97 @@ pub trait Host: Send + Sync + 'static {
     fn icon(&self, icon: &Icon, px: u32) -> Option<IconRgba>;
     /// La ventana se acaba de mostrar.
     fn shown(&self) {}
+    /// Contenido del panel de previsualización de un archivo o carpeta (bloqueante, RF-017).
+    fn preview(&self, _path: &Path) -> Option<Preview> {
+        None
+    }
+}
+
+/// Contenido del panel de previsualización.
+#[derive(Debug, Clone, Default)]
+pub struct Preview {
+    /// Miniatura o icono grande.
+    pub image: Option<IconRgba>,
+    /// Primeras líneas de un archivo de texto.
+    pub text: Option<String>,
+    /// `true` si `text` es Markdown.
+    pub markdown: bool,
+    /// Datos del archivo: `(etiqueta, valor)`.
+    pub info: Vec<(String, String)>,
+}
+
+/// Color RGBA de 8 bits.
+pub type Rgba8 = [u8; 4];
+
+/// Aspecto de la interfaz: el tema ya resuelto, con el escalado de texto y el contraste alto
+/// aplicados por la aplicación (RF-192, RF-214).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UiStyle {
+    /// Fondo (se usa con `opacity` o `solid_opacity`).
+    pub background: Rgba8,
+    /// Opacidad del fondo sobre Mica/Acrílico.
+    pub opacity: f32,
+    /// Opacidad del fondo sólido.
+    pub solid_opacity: f32,
+    /// `true` si la ventana tiene Mica/Acrílico debajo.
+    pub translucent: bool,
+    /// Texto.
+    pub foreground: Rgba8,
+    /// Texto secundario.
+    pub muted: Rgba8,
+    /// Acento.
+    pub accent: Rgba8,
+    /// Fondo de la fila seleccionada.
+    pub selection: Rgba8,
+    /// Texto de la fila seleccionada.
+    pub selection_foreground: Rgba8,
+    /// Separadores.
+    pub divider: Rgba8,
+    /// Fuente principal.
+    pub font: String,
+    /// Fuente monoespaciada.
+    pub mono: String,
+    /// Tamaño del título de las filas.
+    pub font_size: f32,
+    /// Alto de fila.
+    pub row_height: f32,
+    /// Lado del icono.
+    pub icon_size: f32,
+    /// Alto del campo de búsqueda.
+    pub search_height: f32,
+    /// Margen interior horizontal.
+    pub padding: f32,
+    /// Separación icono-texto.
+    pub spacing: f32,
+    /// Radio de filas e iconos.
+    pub radius: f32,
+}
+
+impl Default for UiStyle {
+    /// Tokyo Night.
+    fn default() -> Self {
+        Self {
+            background: [0x1a, 0x1b, 0x26, 255],
+            opacity: 0.55,
+            solid_opacity: 1.0,
+            translucent: false,
+            foreground: [0xc0, 0xca, 0xf5, 255],
+            muted: [0x73, 0x7a, 0xa2, 255],
+            accent: [0x7a, 0xa2, 0xf7, 255],
+            selection: [0x28, 0x34, 0x57, 217],
+            selection_foreground: [0xc0, 0xca, 0xf5, 255],
+            divider: [0x73, 0x7a, 0xa2, 89],
+            font: "Segoe UI Variable Text".into(),
+            mono: "Cascadia Mono".into(),
+            font_size: 15.0,
+            row_height: 48.0,
+            icon_size: 28.0,
+            search_height: 56.0,
+            padding: 12.0,
+            spacing: 12.0,
+            radius: 8.0,
+        }
+    }
 }
 
 /// Qué hacer con el texto al mostrar la ventana (RF-004).
@@ -65,6 +157,14 @@ pub struct UiConfig {
     pub hide_after_action: bool,
     /// Política de texto al mostrar.
     pub on_show: OnShow,
+    /// Aspecto.
+    pub style: UiStyle,
+    /// Animaciones (ya combinado con el ajuste de Windows, RF-195).
+    pub animations: bool,
+    /// Panel de previsualización visible al mostrar la ventana.
+    pub preview_panel: bool,
+    /// Ancho del panel.
+    pub preview_width: f32,
 }
 
 impl Default for UiConfig {
@@ -75,6 +175,10 @@ impl Default for UiConfig {
             hide_on_blur: true,
             hide_after_action: true,
             on_show: OnShow::SelectAll,
+            style: UiStyle::default(),
+            animations: true,
+            preview_panel: false,
+            preview_width: 340.0,
         }
     }
 }

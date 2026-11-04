@@ -1,0 +1,12 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "dracula" y cambia solo lo que quieras.
+[theme]
+name = "Dracula"
+dark = true
+
+[theme.colors]
+background = "#282a36"
+foreground = "#f8f8f2"
+accent = "#bd93f9"
+selection = "#44475a"
+muted = "#6272a4"

@@ -1,0 +1,12 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "nord" y cambia solo lo que quieras.
+[theme]
+name = "Nord"
+dark = true
+
+[theme.colors]
+background = "#2e3440"
+foreground = "#eceff4"
+accent = "#88c0d0"
+selection = "#434c5e"
+muted = "#7b88a1"

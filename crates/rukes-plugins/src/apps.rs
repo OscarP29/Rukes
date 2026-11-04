@@ -208,6 +208,7 @@ impl AppsPlugin {
         it.fuzzy = fuzzy;
         it.alias_match = alias;
         it.icon = Icon::Shell(kind.icon_source());
+        it.preview = kind.file_path().map(Path::to_path_buf);
         it.subtitle = match (&app.kind, kind.file_path()) {
             (Kind::Packaged { .. }, _) => tr("apps.packaged").to_owned(),
             (_, Some(p)) => p.display().to_string(),
@@ -260,7 +261,7 @@ impl Plugin for AppsPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "apps".into(),
-            name: "Aplicaciones".into(),
+            name: tr("apps.name").into(),
             prefix: None,
             keywords: Vec::new(),
             priority: self.settings.priority,

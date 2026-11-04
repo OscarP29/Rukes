@@ -91,6 +91,8 @@ pub struct ResultItem {
     pub actions: Vec<Action>,
     /// Datos opacos para el plugin (ruta, AUMID, etc.).
     pub payload: String,
+    /// Archivo o carpeta que muestra el panel de previsualización (RF-017).
+    pub preview: Option<PathBuf>,
 }
 
 impl ResultItem {
@@ -107,6 +109,7 @@ impl ResultItem {
             score: 0.0,
             actions: vec![Action::new(ActionId::OPEN, "action.open")],
             payload: String::new(),
+            preview: None,
         }
     }
 

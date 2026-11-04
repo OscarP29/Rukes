@@ -4,6 +4,32 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 4: temas, previsualización e i18n
+
+#### Añadido
+- Temas en TOML (`[theme]`, `[theme.colors]`, `[theme.font]`, `[theme.layout]`): colores,
+  fuentes, radio, márgenes, opacidad, tamaño de icono y alto de fila, con `extends` para cambiar
+  solo algunos valores. Errores con línea y columna; se mantiene el último tema válido.
+- Temas incluidos: Tokyo Night, Catppuccin (Latte, Frappé, Macchiato, Mocha), Gruvbox, Nord,
+  Dracula y Rukes Light. `theme = "system"` (por defecto) usa `light_theme`/`dark_theme` según
+  el modo de Windows.
+- Carpeta `themes` junto a la configuración, vigilada: los temas se recargan al guardar.
+- Animaciones de 80–150 ms al aparecer, al cambiar de selección y al cambiar de tamaño
+  (`window.animations`); se apagan también si Windows tiene desactivadas las animaciones.
+- Panel de previsualización a la derecha (`Ctrl+P` o `window.preview_panel`): miniatura,
+  texto, Markdown y datos del archivo o carpeta.
+- Caché de iconos en disco (`cache/icons`), invalidada por fecha y tamaño del archivo.
+- Textos de la interfaz en `lang/es.toml` y `lang/en.toml` (incluidos en el binario); un archivo
+  en la carpeta `lang` de la configuración cambia textos o añade un idioma sin recompilar, y se
+  recarga al guardar.
+- Respeta el escalado de texto y el contraste alto de Windows.
+- Texto con ligaduras, respaldo de fuentes y emoji en color.
+
+#### Cambiado
+- `window.backdrop` pasa a `auto` (el del tema) por defecto; con contraste alto siempre es
+  sólido. El fondo sólido (Windows 10) es opaco.
+- Todas las cadenas bilingües del código pasan a claves de traducción.
+
 ### Fase 3: sistema de scripts
 
 #### Añadido

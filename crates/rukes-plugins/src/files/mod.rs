@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use notify::{EventKind, RecursiveMode, Watcher as _};
-use rukes_core::i18n::{Lang, language};
+use rukes_core::i18n::tr;
 use rukes_core::{
     Action, ActionId, ActionOutcome, CancelToken, Icon, Plugin, PluginError, PluginMetadata, Query,
     ResultItem,
@@ -374,6 +374,7 @@ impl FilesPlugin {
         let mut it = ResultItem::new(path.to_string_lossy().to_lowercase(), name);
         it.subtitle = path.parent().map(display_dir).unwrap_or_default();
         it.icon = Icon::File(path.clone());
+        it.preview = Some(path.clone());
         it.fuzzy = score;
         it.actions
             .push(Action::new(ActionId::OPEN_LOCATION, "action.open_location"));
@@ -393,30 +394,9 @@ impl FilesPlugin {
 impl Plugin for FilesPlugin {
     fn metadata(&self) -> PluginMetadata {
         let (id, name) = match self.kind {
-            Kind::Any => (
-                "files",
-                if language() == Lang::Es {
-                    "Archivos"
-                } else {
-                    "Files"
-                },
-            ),
-            Kind::Files => (
-                "files-f",
-                if language() == Lang::Es {
-                    "Solo archivos"
-                } else {
-                    "Files only"
-                },
-            ),
-            Kind::Dirs => (
-                "files-d",
-                if language() == Lang::Es {
-                    "Carpetas"
-                } else {
-                    "Folders"
-                },
-            ),
+            Kind::Any => ("files", tr("files.name")),
+            Kind::Files => ("files-f", tr("files.name_files")),
+            Kind::Dirs => ("files-d", tr("files.name_dirs")),
         };
         PluginMetadata {
             id: id.into(),

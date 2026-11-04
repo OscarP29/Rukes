@@ -4,13 +4,14 @@
 mod hotkey;
 pub mod paths;
 mod schema;
+pub mod theme;
 mod watch;
 
 use std::path::{Path, PathBuf};
 
 pub use hotkey::{Hotkey, HotkeyError, Modifiers};
 pub use schema::*;
-pub use watch::ConfigWatcher;
+pub use watch::{ConfigWatcher, DirWatcher};
 
 /// Error al cargar la configuración, con posición para mostrarlo al usuario (RF-201).
 #[derive(Debug, Clone, thiserror::Error)]
@@ -85,6 +86,7 @@ mod tests {
         assert_eq!(c.search.frecency_weight, d.search.frecency_weight);
         // Las secciones de plugins de la plantilla coinciden con los valores por defecto.
         assert_eq!(c.general, d.general);
+        assert_eq!(c.window, d.window);
         assert_eq!(c.plugins, d.plugins);
         assert_eq!(c.scripts, d.scripts);
     }

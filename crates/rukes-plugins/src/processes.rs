@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use rukes_core::i18n::{Lang, language};
+use rukes_core::i18n::{tr, trf};
 use rukes_core::{
     ActionId, ActionOutcome, CancelToken, Fuzzy, Icon, Plugin, PluginError, PluginMetadata, Query,
     ResultItem,
@@ -29,10 +29,6 @@ pub struct ProcessesPlugin {
     last: Mutex<Option<Sample>>,
     /// Prioridad configurada.
     pub priority: f32,
-}
-
-fn es() -> bool {
-    language() == Lang::Es
 }
 
 /// Formatea bytes en MB/GB.
@@ -186,17 +182,9 @@ impl ProcessesPlugin {
                     g.name.to_owned()
                 },
             );
-            let sys = if es() {
-                "proceso del sistema"
-            } else {
-                "system process"
-            };
+            let sys = tr("processes.system");
             let what = if count > 1 {
-                if es() {
-                    format!("{count} procesos")
-                } else {
-                    format!("{count} processes")
-                }
+                trf("processes.count", &[("n", &count)])
             } else {
                 format!("PID {}", g.procs[0].pid)
             };
@@ -262,11 +250,7 @@ impl ProcessesPlugin {
         };
         let n = pids.len();
         let target = if n > 1 {
-            if es() {
-                format!("{name} ({n} procesos)")
-            } else {
-                format!("{name} ({n} processes)")
-            }
+            trf("processes.target_many", &[("name", &name), ("n", &n)])
         } else {
             format!("{name} (PID {})", pids.first().copied().unwrap_or(0))
         };
@@ -280,39 +264,15 @@ impl ProcessesPlugin {
         vec![
             mk(
                 "confirm:kill",
-                if es() {
-                    format!("Sí, terminar {target}")
-                } else {
-                    format!("Yes, end {target}")
-                },
-                if es() {
-                    "Se perderán los datos sin guardar"
-                } else {
-                    "Unsaved data will be lost"
-                },
+                trf("processes.confirm", &[("target", &target)]),
+                tr("processes.confirm_sub"),
             ),
             mk(
                 "confirm:tree",
-                if es() {
-                    format!("Terminar {target} y sus procesos hijos")
-                } else {
-                    format!("End {target} and its child processes")
-                },
-                if es() {
-                    "Árbol de procesos"
-                } else {
-                    "Process tree"
-                },
+                trf("processes.tree", &[("target", &target)]),
+                tr("processes.tree_sub"),
             ),
-            mk(
-                "cancel",
-                if es() {
-                    "Cancelar".into()
-                } else {
-                    "Cancel".into()
-                },
-                "",
-            ),
+            mk("cancel", tr("common.cancel").into(), ""),
         ]
     }
 
@@ -345,14 +305,7 @@ impl ProcessesPlugin {
             }
         }
         if errors > 0 && errors == seen.len() {
-            return Err(PluginError::Failed(
-                if es() {
-                    "No se pudo terminar (¿requiere administrador?)"
-                } else {
-                    "Could not end it (requires administrator?)"
-                }
-                .into(),
-            ));
+            return Err(PluginError::Failed(tr("processes.kill_failed").into()));
         }
         Ok(raw.to_owned())
     }
@@ -362,11 +315,7 @@ impl Plugin for ProcessesPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "processes".into(),
-            name: if es() {
-                "Procesos".into()
-            } else {
-                "Processes".into()
-            },
+            name: tr("processes.name").into(),
             prefix: None,
             keywords: vec!["kill".into(), "ps".into(), "proc".into()],
             priority: 0.3 + self.priority,
@@ -424,7 +373,7 @@ mod tests {
 
     #[test]
     fn use_case_6_kill_chrome_lists_group_and_processes() {
-        rukes_core::i18n::set_language("es", "");
+        let _ = rukes_core::i18n::set_language("es", "");
         let all = [
             p(10, "chrome.exe", 300),
             p(11, "chrome.exe", 500),

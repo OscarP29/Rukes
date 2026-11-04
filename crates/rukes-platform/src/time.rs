@@ -1,10 +1,10 @@
 //! Hora local y en otras zonas horarias con la base de datos de Windows (RF-073).
 
-use windows::Win32::Foundation::SYSTEMTIME;
+use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
 use windows::Win32::System::SystemInformation::{GetLocalTime, GetSystemTime};
 use windows::Win32::System::Time::{
-    DYNAMIC_TIME_ZONE_INFORMATION, EnumDynamicTimeZoneInformation,
-    SystemTimeToTzSpecificLocalTimeEx,
+    DYNAMIC_TIME_ZONE_INFORMATION, EnumDynamicTimeZoneInformation, FileTimeToSystemTime,
+    SystemTimeToTzSpecificLocalTime, SystemTimeToTzSpecificLocalTimeEx,
 };
 
 /// Fecha y hora civil.
@@ -41,6 +41,25 @@ impl From<SYSTEMTIME> for DateTime {
 pub fn local_now() -> DateTime {
     // SAFETY: sin precondiciones.
     unsafe { GetLocalTime() }.into()
+}
+
+/// Convierte un instante (p. ej. la fecha de modificación de un archivo) a hora local.
+pub fn local_from(t: std::time::SystemTime) -> Option<DateTime> {
+    let since = t.duration_since(std::time::UNIX_EPOCH).ok()?;
+    // FILETIME: intervalos de 100 ns desde 1601-01-01.
+    let ticks = since.as_nanos() / 100 + 116_444_736_000_000_000;
+    let ticks = u64::try_from(ticks).ok()?;
+    let ft = FILETIME {
+        dwLowDateTime: ticks as u32,
+        dwHighDateTime: (ticks >> 32) as u32,
+    };
+    let (mut utc, mut local) = (SYSTEMTIME::default(), SYSTEMTIME::default());
+    // SAFETY: estructuras locales válidas.
+    unsafe {
+        FileTimeToSystemTime(&ft, &mut utc).ok()?;
+        SystemTimeToTzSpecificLocalTime(None, &utc, &mut local).ok()?;
+    }
+    Some(local.into())
 }
 
 fn key_name(tz: &DYNAMIC_TIME_ZONE_INFORMATION) -> String {
@@ -80,5 +99,15 @@ mod tests {
         assert!(now_in_zone("Tokyo Standard Time").is_some());
         assert!(now_in_zone("UTC").is_some());
         assert!(now_in_zone("Nowhere Standard Time").is_none());
+    }
+
+    #[test]
+    fn local_from_matches_local_now() {
+        let a = local_from(std::time::SystemTime::now()).unwrap();
+        let b = local_now();
+        assert_eq!(
+            (a.year, a.month, a.day, a.hour),
+            (b.year, b.month, b.day, b.hour)
+        );
     }
 }

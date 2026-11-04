@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct Template {
     /// Extensión del archivo.
     pub ext: &'static str,
-    /// Nombre del lenguaje.
+    /// Nombre del lenguaje (o clave de traducción).
     pub label: &'static str,
     body: &'static str,
 }
@@ -27,7 +27,7 @@ pub const TEMPLATES: &[Template] = &[
     },
     Template {
         ext: "js",
-        label: "JavaScript (Node, Deno o Bun)",
+        label: "templates.js",
         body: include_str!("../templates/template.js"),
     },
     Template {
@@ -37,7 +37,7 @@ pub const TEMPLATES: &[Template] = &[
     },
     Template {
         ext: "rhai",
-        label: "Rhai (embebido, sin dependencias)",
+        label: "templates.rhai",
         body: include_str!("../templates/template.rhai"),
     },
 ];

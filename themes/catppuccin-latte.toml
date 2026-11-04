@@ -1,0 +1,12 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "catppuccin-latte" y cambia solo lo que quieras.
+[theme]
+name = "Catppuccin Latte"
+dark = false
+
+[theme.colors]
+background = "#eff1f5"
+foreground = "#4c4f69"
+accent = "#1e66f5"
+selection = "#ccd0da"
+muted = "#8c8fa1"

@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use rukes_core::i18n::{Lang, language, tr};
+use rukes_core::i18n::{Lang, language, tr, trf};
 use rukes_core::{
     ActionOutcome, CancelToken, Icon, Plugin, PluginError, PluginMetadata, Query, ResultItem,
 };
@@ -480,10 +480,7 @@ pub fn datetime(
         let today = now();
         let (y, m, d) = parse_date(rest, today)?;
         let diff = days_from_civil(y, m, d) - days_from_civil(today.year, today.month, today.day);
-        let text = match language() {
-            Lang::Es => format!("{diff} días"),
-            Lang::En => format!("{diff} days"),
-        };
+        let text = trf("calc.days", &[("n", &diff)]);
         return Some(item(
             "days",
             text,
@@ -545,7 +542,7 @@ impl Plugin for CalcPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "calc".into(),
-            name: "Calculadora".into(),
+            name: tr("calc.name").into(),
             prefix: Some(self.prefix.clone()),
             keywords: Vec::new(),
             priority: 0.5,
@@ -658,7 +655,7 @@ mod tests {
 
     #[test]
     fn datetime_queries() {
-        rukes_core::i18n::set_language("es", "");
+        let _ = rukes_core::i18n::set_language("es", "");
         let now = || DateTime {
             year: 2026,
             month: 11,

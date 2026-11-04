@@ -62,6 +62,16 @@ impl Paths {
         self.config_dir.join("config.toml")
     }
 
+    /// Temas del usuario (RF-192).
+    pub fn themes_dir(&self) -> PathBuf {
+        self.config_dir.join("themes")
+    }
+
+    /// Idiomas del usuario (RF-211).
+    pub fn lang_dir(&self) -> PathBuf {
+        self.config_dir.join("lang")
+    }
+
     /// Archivo de frecency.
     pub fn frecency_file(&self) -> PathBuf {
         self.state_dir.join("frecency.json")

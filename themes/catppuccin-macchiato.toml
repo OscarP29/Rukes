@@ -1,0 +1,12 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "catppuccin-macchiato" y cambia solo lo que quieras.
+[theme]
+name = "Catppuccin Macchiato"
+dark = true
+
+[theme.colors]
+background = "#24273a"
+foreground = "#cad3f5"
+accent = "#8aadf4"
+selection = "#363a4f"
+muted = "#8087a2"

@@ -1,0 +1,33 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "tokyo-night" y cambia solo lo que quieras.
+[theme]
+name = "Tokyo Night"
+dark = true
+
+[theme.colors]
+background = "#1a1b26"
+foreground = "#c0caf5"
+accent = "#7aa2f7"
+selection = "#283457"
+muted = "#737aa2"
+
+# Valores por defecto de todos los temas (los demás los heredan si no los cambian).
+# divider = "#737aa259"         # separador; por defecto, muted con transparencia
+# selection_foreground = ""     # texto de la fila seleccionada; por defecto, foreground
+
+# backdrop = "mica"             # mica | acrylic | solid (si [window] backdrop = "auto")
+# opacity = 0.55                # opacidad del fondo sobre Mica/Acrílico
+# solid_opacity = 1.0           # opacidad con fondo sólido (Windows 10)
+# radius = 8                    # radio de las filas y los iconos
+
+# [theme.font]
+# family = "Segoe UI Variable Text"   # cualquier fuente instalada, también Nerd Fonts
+# size = 15
+# mono = "Cascadia Mono"
+
+# [theme.layout]
+# row_height = 48
+# icon_size = 28
+# search_height = 56
+# padding = 12
+# spacing = 12
