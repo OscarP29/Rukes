@@ -69,3 +69,28 @@ pub fn files(c: &Config) -> rukes_plugins::FilesSettings {
         terminal: c.general.terminal.clone(),
     }
 }
+
+/// Carpeta de scripts: la configurada o `scripts` junto a la configuración (RF-130).
+pub fn scripts_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path::PathBuf {
+    let d = c.scripts.dir.trim();
+    if d.is_empty() {
+        paths.config_dir.join("scripts")
+    } else {
+        rukes_script::args::expand_path(d)
+    }
+}
+
+pub fn scripts(c: &Config) -> rukes_script::Settings {
+    let s = &c.scripts;
+    rukes_script::Settings {
+        editor: s.editor.clone(),
+        default_timeout: rukes_script::header::parse_duration(&s.default_timeout)
+            .unwrap_or(std::time::Duration::from_secs(30)),
+        interpreters: s
+            .interpreters
+            .iter()
+            .map(|(k, v)| (k.trim_start_matches('.').to_ascii_lowercase(), v.clone()))
+            .collect(),
+        priority: s.priority,
+    }
+}

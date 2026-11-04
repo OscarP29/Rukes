@@ -128,6 +128,22 @@ impl Engine {
         }
     }
 
+    /// Vuelve a leer los metadatos de los plugins (prefijos y palabras clave que cambian en
+    /// caliente, como los alias de scripts).
+    pub fn reload_metadata(&self) {
+        let current = self.snapshot();
+        let regs = current
+            .iter()
+            .map(|r| Registered {
+                meta: r.plugin.metadata(),
+                plugin: Arc::clone(&r.plugin),
+            })
+            .collect();
+        if let Ok(mut p) = self.plugins.write() {
+            *p = Arc::new(regs);
+        }
+    }
+
     /// Actualiza los ajustes.
     pub fn set_config(&self, config: EngineConfig) {
         if let Ok(mut c) = self.shared.config.write() {
@@ -260,20 +276,17 @@ fn route(plugins: &[Registered], raw: &str) -> Vec<(usize, String, bool)> {
     if let Some((i, len)) = by_prefix {
         return vec![(i, trimmed[len..].trim().to_owned(), true)];
     }
-    // 2. Palabra clave como primera palabra, seguida de un espacio (`g` a secas sigue siendo una
-    // búsqueda global; `g ` ya va al buscador web).
-    let mut parts = trimmed.splitn(2, char::is_whitespace);
-    if let (Some(first), Some(rest)) = (parts.next(), parts.next()) {
-        let rest = rest.trim();
-        for (i, r) in plugins.iter().enumerate() {
-            if r.meta
-                .keywords
-                .iter()
-                .any(|k| k.eq_ignore_ascii_case(first))
-            {
-                return vec![(i, rest.to_owned(), true)];
-            }
-        }
+    // 2. Palabra clave al principio, seguida de un espacio (`g` a secas sigue siendo una búsqueda
+    // global; `g ` ya va al buscador web). Puede tener varias palabras (`gh issue`, alias de
+    // scripts) y gana la más larga: `gh issue x` va al script antes que a la búsqueda `gh`.
+    let by_keyword = plugins
+        .iter()
+        .enumerate()
+        .flat_map(|(i, r)| r.meta.keywords.iter().map(move |k| (i, k)))
+        .filter_map(|(i, k)| strip_keyword(trimmed, k).map(|rest| (i, k.len(), rest)))
+        .max_by_key(|(_, len, _)| *len);
+    if let Some((i, _, rest)) = by_keyword {
+        return vec![(i, rest.trim().to_owned(), true)];
     }
     // 3. Plugins globales.
     let text = raw.trim();
@@ -286,6 +299,23 @@ fn route(plugins: &[Registered], raw: &str) -> Vec<(usize, String, bool)> {
         .filter(|(_, r)| r.meta.global)
         .map(|(i, _)| (i, text.to_owned(), false))
         .collect()
+}
+
+/// Si `text` empieza por la palabra clave `keyword` (sin distinguir mayúsculas) seguida de un
+/// espacio, devuelve el resto.
+fn strip_keyword<'a>(text: &'a str, keyword: &str) -> Option<&'a str> {
+    if keyword.is_empty() {
+        return None;
+    }
+    let mut chars = text.char_indices();
+    for k in keyword.chars() {
+        let (_, c) = chars.next()?;
+        if !c.to_lowercase().eq(k.to_lowercase()) {
+            return None;
+        }
+    }
+    let (idx, next) = chars.next()?;
+    next.is_whitespace().then(|| &text[idx..])
 }
 
 fn worker(rx: &Receiver<Job>, shared: &Shared) {
@@ -469,6 +499,26 @@ mod tests {
         let b = collect(&e, "kill chr", Duration::from_millis(200));
         assert_eq!(b.len(), 1);
         assert_eq!(b[0].plugin_id, "proc");
+        // La palabra clave de varias palabras más larga gana.
+        let e2 = engine(vec![
+            ListPlugin {
+                keywords: vec!["gh".into()],
+                global: false,
+                ..ListPlugin::new("web", vec!["issue x"])
+            },
+            ListPlugin {
+                keywords: vec!["GH Issue".into(), "día".into()],
+                global: false,
+                ..ListPlugin::new("scripts", vec!["mi bug"])
+            },
+        ]);
+        let b = collect(&e2, "gh issue mi bug", Duration::from_millis(200));
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].plugin_id, "scripts");
+        let b = collect(&e2, "gh issues x", Duration::from_millis(200));
+        assert_eq!(b[0].plugin_id, "web");
+        let b = collect(&e2, "DÍA mi", Duration::from_millis(200));
+        assert_eq!(b[0].plugin_id, "scripts");
         // Sin espacio, la palabra clave no dirige la búsqueda.
         let b = collect(&e, "kill", Duration::from_millis(200));
         assert_eq!(b.len(), 1);

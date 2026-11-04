@@ -41,6 +41,7 @@ crc32fast = "1.5"
 base64 = "0.23"
 getrandom = "0.4"
 globset = "0.4"
+rhai = { version = "1.27", features = ["serde"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

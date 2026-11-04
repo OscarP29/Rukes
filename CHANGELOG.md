@@ -4,6 +4,37 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 3: sistema de scripts
+
+#### Añadido
+- Carpeta de scripts vigilada (`[scripts] dir`, por defecto `scripts` junto a la configuración):
+  todo `.ps1`, `.bat`/`.cmd`, `.py`, `.js`, `.ts`, `.lua`, `.rhai`, `.exe` o extensión mapeada
+  en `[scripts.interpreters]` con cabecera `@rukes.*` aparece sin reiniciar. La primera vez se
+  copian dos ejemplos.
+- Cabecera de metadatos: nombre, descripción, icono, alias, argumentos, salida, timeout, atajo
+  (se registrará en la fase 6), admin, directorio de trabajo, intérprete y `filter`.
+- Argumentos con tipo (texto, número, opción, archivo, sí/no), obligatorios o con valor por
+  defecto, escritos en línea tras el alias (`gh issue Mi bug`); las opciones se completan.
+- Modos de salida: silencioso, notificación (toast desde el icono de la bandeja), launcher,
+  portapapeles y terminal visible. `Ctrl+Enter` ejecuta como administrador.
+- Tiempo máximo por script (o `default_timeout`) que termina todo el árbol de procesos (job
+  object), y cancelación desde el resultado «Ejecutando…» o desde `logs`.
+- `logs`: historial persistente de ejecuciones con estado, duración y salida.
+- `new script [nombre]`: plantillas de PowerShell, Python, JavaScript, Batch y Rhai que se abren
+  en el editor configurado.
+- `Ctrl+E` edita un script y `Ctrl+D` lo mueve a la papelera (con confirmación).
+- Rhai embebido con API segura: `open`, `run`, portapapeles, `notify`, `sleep`, HTTP (WinHTTP,
+  sin dependencias), ventanas (`windows`, `focus_window`, `move_window`), `env`, JSON. Sin
+  acceso a archivos, `eval` ni módulos; límites de tiempo y de operaciones.
+- *Script filters*: scripts que devuelven resultados JSON mientras se escribe.
+- Variables `RUKES_QUERY`, `RUKES_ARG_<NOMBRE>`, `RUKES_SELECTED_FILE(S)` (selección del
+  Explorador), `RUKES_CLIPBOARD`, `RUKES_ACTIVE_WINDOW`, `RUKES_ACTIVE_PROCESS` y otras.
+- `scripts-examples/` con ejemplos (incluido `gh issue`), `docs/checklists/fase-3.md`.
+
+#### Cambiado
+- Las palabras clave pueden tener varias palabras y gana la más larga: `gh issue x` va al
+  script antes que a la búsqueda web `gh`.
+
 ### Fase 2: plugins esenciales
 
 #### Añadido

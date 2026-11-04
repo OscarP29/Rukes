@@ -20,6 +20,11 @@ impl ActionId {
     /// Abrir una terminal en la carpeta (`Ctrl+T`).
     pub const TERMINAL_HERE: &'static str = "terminal_here";
 
+    /// Editar (`Ctrl+E`).
+    pub const EDIT: &'static str = "edit";
+    /// Borrar, con confirmación (`Ctrl+D`).
+    pub const DELETE: &'static str = "delete";
+
     /// Crea un id a partir de un texto.
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())

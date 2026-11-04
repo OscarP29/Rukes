@@ -86,6 +86,7 @@ mod tests {
         // Las secciones de plugins de la plantilla coinciden con los valores por defecto.
         assert_eq!(c.general, d.general);
         assert_eq!(c.plugins, d.plugins);
+        assert_eq!(c.scripts, d.scripts);
     }
 
     #[test]

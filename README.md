@@ -30,6 +30,8 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `bloquear`, `apagar`, `vaciar papelera` | Comandos del sistema (con confirmación) |
 | `win code`, `kill chrome`, `ps` | Ventanas abiertas y procesos |
 | `uuid`, `pass 24`, `sha256 texto`, `b64 texto` | Generadores, hashes y codificadores (Enter copia) |
+| `gh issue Mi bug`, `hola Ana` | Tus scripts, con argumentos en línea |
+| `new script Backup`, `logs` | Crear un script desde una plantilla, historial de ejecuciones |
 
 | Tecla | Acción |
 | --- | --- |
@@ -39,6 +41,8 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `Ctrl+C` | Copiar la ruta |
 | `Ctrl+O` | Abrir con… (archivos) |
 | `Ctrl+T` | Abrir una terminal en la carpeta |
+| `Ctrl+E` | Editar el script |
+| `Ctrl+D` | Mover el script a la papelera (con confirmación) |
 | `↑` `↓` / `Tab` / `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
 | `Esc` | Ocultar |
 
@@ -59,6 +63,7 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `crates/rukes-platform` | API de Windows (único crate con `unsafe`) |
 | `crates/rukes-ui` | Ventana, render, animaciones |
 | `crates/rukes-app` | Binario `rukes.exe` |
+| `scripts-examples/` | Scripts de ejemplo |
 | `spikes/` | Prototipos desechables de la fase 0 (workspace aparte) |
 | `docs/decisions/` | ADRs |
 

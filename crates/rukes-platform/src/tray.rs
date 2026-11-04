@@ -15,7 +15,8 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Shell::{
-    NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW, Shell_NotifyIconW,
+    NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_NOSOUND, NIM_ADD,
+    NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
@@ -178,6 +179,19 @@ fn notify_data(hwnd: HWND, icon: HICON, tip: &str) -> NOTIFYICONDATAW {
         *d = s;
     }
     nid
+}
+
+/// Copia `s` en un buffer UTF-16 fijo, cortando y dejando el terminador.
+fn copy_truncated(dst: &mut [u16], s: &str) {
+    let max = dst.len().saturating_sub(1);
+    let mut n = 0;
+    for (d, c) in dst.iter_mut().zip(s.encode_utf16().take(max)) {
+        *d = c;
+        n += 1;
+    }
+    if let Some(z) = dst.get_mut(n) {
+        *z = 0;
+    }
 }
 
 fn add_icon(hwnd: HWND, st: &State) {
@@ -378,6 +392,26 @@ impl Tray {
             thread_id,
             hwnd: hwnd_slot,
         })
+    }
+
+    /// Muestra una notificación del sistema desde el icono (en Windows 10/11 aparece como toast).
+    pub fn notify(&self, title: &str, body: &str, error: bool) {
+        let hwnd = self.hwnd.load(Ordering::SeqCst);
+        if hwnd == 0 {
+            return;
+        }
+        let mut nid = NOTIFYICONDATAW {
+            cbSize: size_of::<NOTIFYICONDATAW>() as u32,
+            hWnd: HWND(hwnd as *mut _),
+            uID: ICON_ID,
+            uFlags: NIF_INFO,
+            dwInfoFlags: (if error { NIIF_ERROR } else { NIIF_INFO }) | NIIF_NOSOUND,
+            ..Default::default()
+        };
+        copy_truncated(&mut nid.szInfoTitle, title);
+        copy_truncated(&mut nid.szInfo, if body.is_empty() { " " } else { body });
+        // SAFETY: estructura local completa; el icono pertenece a esta ventana.
+        let _ = unsafe { Shell_NotifyIconW(NIM_MODIFY, &nid) };
     }
 
     /// Quita el icono ya (para salir con `process::exit` sin dejar un icono fantasma).

@@ -92,6 +92,15 @@ pub enum UiEvent {
     Notice(String),
     /// Resultados del motor.
     Batch(QueryBatch),
+    /// Sustituye la lista por `items` si el primer resultado mostrado tiene la clave
+    /// `replaces` (`plugin:id`). Lo usan las acciones que terminan en segundo plano, como un
+    /// script que muestra su salida en el launcher.
+    Results {
+        /// Clave del resultado provisional («Ejecutando…»).
+        replaces: String,
+        /// Resultados nuevos (con `plugin_id` ya relleno).
+        items: Vec<ResultItem>,
+    },
 }
 
 /// Extremo emisor del canal de la UI. Se puede clonar y usar desde cualquier hilo.

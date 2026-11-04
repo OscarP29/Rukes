@@ -6,10 +6,11 @@ use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, CoCreateInstance, IPersistFile, STGM_READ,
 };
 use windows::Win32::UI::Shell::{
-    IShellLinkW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW,
-    ShellLink,
+    FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, IShellLinkW,
+    SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, SHFILEOPSTRUCTW, SHFileOperationW,
+    ShellExecuteExW, ShellLink,
 };
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNORMAL};
 use windows::core::{Interface, PCWSTR, w};
 
 use crate::{Context as _, Result, wide};
@@ -25,6 +26,17 @@ pub enum Verb {
 
 /// Abre un archivo, acceso directo, URL o `shell:` URI con `ShellExecuteExW`.
 pub fn launch(target: &str, args: Option<&str>, cwd: Option<&Path>, verb: Verb) -> Result<()> {
+    launch_with(target, args, cwd, verb, true)
+}
+
+/// Como [`launch`], pero permite lanzar con la ventana oculta (`visible = false`).
+pub fn launch_with(
+    target: &str,
+    args: Option<&str>,
+    cwd: Option<&Path>,
+    verb: Verb,
+    visible: bool,
+) -> Result<()> {
     crate::com::ensure_thread();
     let file = wide(target);
     let params = args.map(wide);
@@ -41,11 +53,32 @@ pub fn launch(target: &str, args: Option<&str>, cwd: Option<&Path>, verb: Verb) 
             .as_ref()
             .map_or(PCWSTR::null(), |p| PCWSTR(p.as_ptr())),
         lpDirectory: dir.as_ref().map_or(PCWSTR::null(), |d| PCWSTR(d.as_ptr())),
-        nShow: SW_SHOWNORMAL.0,
+        nShow: if visible { SW_SHOWNORMAL.0 } else { SW_HIDE.0 },
         ..Default::default()
     };
     // SAFETY: todos los punteros de `info` apuntan a buffers locales vivos durante la llamada.
     unsafe { ShellExecuteExW(&mut info) }.ctx("ShellExecuteExW")
+}
+
+/// Mueve un archivo o carpeta a la papelera de reciclaje, sin diálogos.
+pub fn recycle(path: &Path) -> Result<()> {
+    // La lista de rutas termina en doble cero.
+    let mut from = wide(&path.to_string_lossy());
+    from.push(0);
+    let mut op = SHFILEOPSTRUCTW {
+        wFunc: FO_DELETE,
+        pFrom: PCWSTR(from.as_ptr()),
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI).0 as u16,
+        ..Default::default()
+    };
+    // SAFETY: `from` vive durante la llamada y termina en doble cero.
+    let code = unsafe { SHFileOperationW(&mut op) };
+    if code != 0 || op.fAnyOperationsAborted.as_bool() {
+        return Err(crate::PlatformError::Invalid(format!(
+            "no se pudo mover a la papelera (código {code})"
+        )));
+    }
+    Ok(())
 }
 
 /// Abre el Explorador con el archivo seleccionado.
@@ -70,5 +103,18 @@ pub fn resolve_shortcut(lnk: &Path) -> Option<PathBuf> {
             return None;
         }
         Some(PathBuf::from(String::from_utf16_lossy(&buf[..len])))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Ignorado por defecto: deja un archivo en la papelera real del usuario.
+    #[test]
+    #[ignore]
+    fn recycle_moves_a_temp_file_away() {
+        let path = std::env::temp_dir().join(format!("rukes-recycle-{}.txt", std::process::id()));
+        std::fs::write(&path, "x").unwrap();
+        super::recycle(&path).unwrap();
+        assert!(!path.exists());
     }
 }

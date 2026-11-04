@@ -14,6 +14,7 @@ use rukes_plugins::{
     AppsPlugin, CalcPlugin, FileIndex, FilesPlugin, GeneratorsPlugin, ProcessesPlugin, ShellPlugin,
     ShellSettings, SystemCommandsPlugin, WebPlugin, WindowsPlugin,
 };
+use rukes_script::{Catalog, Hooks, RunContext, Runs, Scripts, ScriptsPlugin};
 use rukes_ui::{Host, IconRgba, Sink, UiEvent, UiSender};
 
 use crate::settings;
@@ -70,7 +71,17 @@ pub struct AppHost {
     files: Mutex<Option<Arc<FileIndex>>>,
     tray: Mutex<Option<Tray>>,
     paused: AtomicBool,
+    /// Catálogo de scripts con la carpeta e intérpretes con que se abrió.
+    scripts: Mutex<Option<ScriptCatalog>>,
+    /// Historial de ejecuciones de scripts.
+    runs: Mutex<Option<Arc<Runs>>>,
 }
+
+type ScriptCatalog = (
+    std::path::PathBuf,
+    std::collections::BTreeMap<String, String>,
+    Arc<Catalog>,
+);
 
 impl AppHost {
     pub fn new(
@@ -97,6 +108,8 @@ impl AppHost {
             files: Mutex::new(None),
             tray: Mutex::new(None),
             paused: AtomicBool::new(false),
+            scripts: Mutex::new(None),
+            runs: Mutex::new(None),
         }
     }
 
@@ -180,6 +193,11 @@ impl AppHost {
             *files = None;
         }
         drop(files);
+        if config.scripts.enabled {
+            plugins.push(Arc::new(self.scripts_plugin(config)));
+        } else {
+            *self.scripts.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        }
         let quit_host = Arc::downgrade(self);
         let reload_engine = Arc::clone(&self.engine);
         plugins.push(Arc::new(SystemPlugin {
@@ -192,6 +210,107 @@ impl AppHost {
             on_reload: Box::new(move || reload_engine.refresh_all()),
         }));
         self.engine.set_plugins(plugins);
+    }
+
+    /// Plugin de scripts (sección 5.13). El catálogo y su watcher se conservan entre recargas si
+    /// la carpeta y los intérpretes no cambian.
+    fn scripts_plugin(self: &Arc<Self>, config: &Config) -> Scripts {
+        let settings = settings::scripts(config);
+        let dir = settings::scripts_dir(config, &self.paths);
+        let catalog = {
+            let mut slot = self.scripts.lock().unwrap_or_else(|p| p.into_inner());
+            match slot.as_ref() {
+                Some((d, i, c)) if *d == dir && *i == settings.interpreters => Arc::clone(c),
+                _ => {
+                    let engine = Arc::downgrade(&self.engine);
+                    let c = Catalog::open(
+                        dir.clone(),
+                        settings.interpreters.clone(),
+                        Arc::new(move || {
+                            if let Some(e) = engine.upgrade() {
+                                e.reload_metadata();
+                            }
+                        }),
+                    );
+                    *slot = Some((dir, settings.interpreters.clone(), Arc::clone(&c)));
+                    c
+                }
+            }
+        };
+        let runs = {
+            let mut slot = self.runs.lock().unwrap_or_else(|p| p.into_inner());
+            let runs = slot.get_or_insert_with(|| {
+                Arc::new(Runs::open(
+                    self.paths.state_dir.join("script-runs.json"),
+                    config.scripts.history_size,
+                ))
+            });
+            runs.set_cap(config.scripts.history_size);
+            Arc::clone(runs)
+        };
+        let (n, r, c) = (
+            Arc::downgrade(self),
+            Arc::downgrade(self),
+            Arc::downgrade(self),
+        );
+        let hooks = Hooks {
+            notify: Arc::new(move |title: &str, body: &str, error: bool| {
+                if let Some(h) = n.upgrade() {
+                    h.system_notify(title, body, error);
+                }
+            }),
+            results: Arc::new(move |key: String, items: Vec<ResultItem>| {
+                if let Some(h) = r.upgrade() {
+                    h.script_results(key, items);
+                }
+            }),
+            context: Arc::new(move || c.upgrade().map(|h| h.context()).unwrap_or_default()),
+        };
+        Scripts(Arc::new(ScriptsPlugin::new(catalog, runs, settings, hooks)))
+    }
+
+    /// Notificación del sistema desde el icono de la bandeja.
+    fn system_notify(&self, title: &str, body: &str, error: bool) {
+        match self.tray.lock().ok().as_deref() {
+            Some(Some(t)) => t.notify(title, body, error),
+            _ => self.notice(format!("{title}: {body}")),
+        }
+    }
+
+    /// Salida de un script en modo launcher: a la lista si la ventana está visible; si no, como
+    /// notificación.
+    fn script_results(&self, key: String, items: Vec<ResultItem>) {
+        if window::is_visible(self.hwnd.load(Ordering::SeqCst)) {
+            let _ = self.ui.unbounded_send(UiEvent::Results {
+                replaces: key,
+                items,
+            });
+        } else if let Some(first) = items.first() {
+            let body = items
+                .get(1)
+                .map_or(first.subtitle.as_str(), |i| i.title.as_str())
+                .to_owned();
+            self.system_notify(&first.title, &body, false);
+        }
+    }
+
+    /// Ventana activa antes de abrir el launcher y su selección en el Explorador (RF-141).
+    fn context(&self) -> RunContext {
+        let prev = self.previous.load(Ordering::SeqCst);
+        let w = rukes_platform::explorer::window_context(prev);
+        let selected = if w.class == "CabinetWClass" || w.class == "ExploreWClass" {
+            rukes_platform::explorer::selection(prev)
+        } else {
+            Vec::new()
+        };
+        RunContext {
+            active_window: w.title,
+            active_exe: w
+                .exe
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            selected,
+        }
     }
 
     /// Registra el atajo global; si falla, avisa en la UI (y en el log).
@@ -320,7 +439,7 @@ impl AppHost {
                 dwm::apply(hwnd, settings::backdrop(&config), true);
             }
         }
-        if old.plugins != config.plugins {
+        if old.plugins != config.plugins || old.scripts != config.scripts {
             let me = self.me.lock().ok().and_then(|w| w.upgrade());
             if let Some(me) = me {
                 me.install_plugins(&config);

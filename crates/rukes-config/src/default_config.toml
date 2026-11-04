@@ -109,3 +109,25 @@ exclude = [
 include_hidden = false
 # Caracteres mínimos para buscar archivos sin prefijo.
 min_chars = 3
+
+[scripts]
+# Scripts propios: cualquier archivo de la carpeta con una cabecera "@rukes.name" aparece en el
+# launcher sin reiniciar. "new script" crea uno desde una plantilla y "logs" muestra el historial.
+enabled = true
+priority = 0.05
+# Carpeta vigilada. Vacío = "scripts" dentro de la carpeta de configuración. Admite ~ y %VAR%.
+dir = ""
+# Editor para "new script" y Ctrl+E: comando del PATH o ruta. Si no existe, el Bloc de notas.
+editor = "code"
+# Tiempo máximo por script si su cabecera no dice otro ("15s", "2m"; "0" = sin límite).
+default_timeout = "30s"
+# Ejecuciones que se guardan en "logs".
+history_size = 50
+
+[scripts.interpreters]
+# extensión = comando. .ps1, .bat, .cmd, .exe y .rhai no necesitan intérprete. Si .js no
+# encuentra node, se prueban deno y bun.
+py = "python"
+js = "node"
+ts = "deno run"
+lua = "lua"

@@ -16,6 +16,52 @@ pub struct Config {
     pub search: Search,
     /// Plugins.
     pub plugins: Plugins,
+    /// Scripts del usuario (sección 5.13).
+    pub scripts: Scripts,
+}
+
+/// `[scripts]`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Scripts {
+    /// Activo.
+    pub enabled: bool,
+    /// Prioridad.
+    pub priority: f32,
+    /// Carpeta vigilada (RF-130). Vacío = `scripts` dentro de la carpeta de configuración.
+    /// Admite `~` y variables `%VAR%`.
+    pub dir: String,
+    /// Editor para `new script` y «Editar» (RF-135): un comando del `PATH` o una ruta. Si no
+    /// se encuentra, se usa el Bloc de notas.
+    pub editor: String,
+    /// Tiempo máximo por defecto (`30s`, `2m`, `0` = sin límite) (RF-137).
+    pub default_timeout: String,
+    /// Extensión → intérprete (RF-131). Sustituye a los valores por defecto de cada extensión.
+    pub interpreters: BTreeMap<String, String>,
+    /// Ejecuciones que se guardan en el historial (`logs`) (RF-138).
+    pub history_size: usize,
+}
+
+impl Default for Scripts {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            priority: 0.05,
+            dir: String::new(),
+            editor: "code".into(),
+            default_timeout: "30s".into(),
+            interpreters: [
+                ("py", "python"),
+                ("js", "node"),
+                ("ts", "deno run"),
+                ("lua", "lua"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect(),
+            history_size: 50,
+        }
+    }
 }
 
 /// `[general]`

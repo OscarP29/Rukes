@@ -7,8 +7,9 @@ use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, GetWindowTextLengthW,
-    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SW_RESTORE,
-    SetForegroundWindow, ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, IsZoomed, SW_RESTORE,
+    SWP_NOACTIVATE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow, WS_EX_APPWINDOW,
+    WS_EX_TOOLWINDOW,
 };
 use windows::core::BOOL;
 
@@ -105,6 +106,28 @@ pub fn activate(hwnd: Hwnd) -> bool {
             let _ = ShowWindow(hwnd, SW_RESTORE);
         }
         SetForegroundWindow(hwnd).as_bool()
+    }
+}
+
+/// Mueve y redimensiona la ventana (coordenadas de pantalla en píxeles físicos). Si está
+/// minimizada o maximizada, primero se restaura.
+pub fn set_rect(hwnd: Hwnd, x: i32, y: i32, width: i32, height: i32) -> bool {
+    let hwnd = HWND(hwnd as *mut _);
+    // SAFETY: si el hwnd ya no existe, las llamadas fallan sin efectos.
+    unsafe {
+        if IsIconic(hwnd).as_bool() || IsZoomed(hwnd).as_bool() {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+        }
+        SetWindowPos(
+            hwnd,
+            None,
+            x,
+            y,
+            width.max(1),
+            height.max(1),
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        )
+        .is_ok()
     }
 }
 

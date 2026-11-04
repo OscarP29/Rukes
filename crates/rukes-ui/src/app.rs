@@ -184,6 +184,17 @@ impl State {
         self.host.hide();
     }
 
+    /// Sustituye la lista (confirmaciones, submenús, salida de scripts).
+    fn show_results(&mut self, items: Vec<ResultItem>) -> Task<Message> {
+        // Cancela la consulta en curso para que sus lotes no pisen esta lista.
+        self.qid = self.host.query("", Arc::new(|_| {}));
+        self.results = items;
+        self.selected = 0;
+        self.offset = 0;
+        self.stale = false;
+        Task::batch([self.load_visible_icons(), self.resize()])
+    }
+
     fn on_shown(&mut self) -> Task<Message> {
         // El aviso (p. ej. un error de config llegado con la ventana oculta) se mantiene hasta
         // que el usuario escribe.
@@ -247,6 +258,12 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 s.selected = s.selected.min(s.results.len().saturating_sub(1));
                 Task::batch([s.load_visible_icons(), s.resize()])
             }
+            UiEvent::Results { replaces, items } => {
+                if s.results.first().map(ResultItem::key).as_deref() != Some(&replaces) {
+                    return Task::none();
+                }
+                s.show_results(items)
+            }
         },
         Message::Input(q) => {
             s.query = q;
@@ -291,6 +308,8 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 Key::Character("t") if m.control() => {
                     s.execute(s.selected, ActionId::TERMINAL_HERE)
                 }
+                Key::Character("e") if m.control() => s.execute(s.selected, ActionId::EDIT),
+                Key::Character("d") if m.control() => s.execute(s.selected, ActionId::DELETE),
                 _ => Task::none(),
             }
         }
@@ -331,15 +350,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.notice = Some(n);
                     s.resize()
                 }
-                Ok(ActionOutcome::ShowResults(items)) => {
-                    // Cancela la consulta en curso para que sus lotes no pisen esta lista.
-                    s.qid = s.host.query("", Arc::new(|_| {}));
-                    s.results = items;
-                    s.selected = 0;
-                    s.offset = 0;
-                    s.stale = false;
-                    Task::batch([s.load_visible_icons(), s.resize()])
-                }
+                Ok(ActionOutcome::ShowResults(items)) => s.show_results(items),
                 Err(e) => {
                     s.notice = Some(format!("{}: {e}", tr("error.action")));
                     s.resize()
@@ -372,6 +383,12 @@ fn glyph<'a>(name: &str) -> Element<'a, Message> {
         "generator" => "#",
         "folder" => "/",
         "system" => "sys",
+        "script" => "{}",
+        "new" => "+",
+        "log" => "log",
+        "running" => "..",
+        "error" => "!",
+        "ok" => "ok",
         _ => "·",
     };
     container(

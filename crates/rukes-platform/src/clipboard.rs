@@ -2,9 +2,12 @@
 
 use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL};
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+    CloseClipboard, EmptyClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
+    SetClipboardData,
 };
-use windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
+use windows::Win32::System::Memory::{
+    GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
 
 use crate::{Context as _, Result};
@@ -32,6 +35,32 @@ pub fn set_text(text: &str) -> Result<()> {
                 return Err(e).ctx("SetClipboardData");
             }
             Ok(())
+        })();
+        let _ = CloseClipboard();
+        res
+    }
+}
+
+/// Texto del portapapeles, si lo hay (como mucho `max_chars` caracteres UTF-16).
+pub fn get_text(max_chars: usize) -> Option<String> {
+    // SAFETY: secuencia estándar Open/Get/Lock/Unlock/Close; se lee como mucho el tamaño del
+    // bloque global y hasta el primer cero.
+    unsafe {
+        IsClipboardFormatAvailable(u32::from(CF_UNICODETEXT.0)).ok()?;
+        OpenClipboard(None).ok()?;
+        let res = (|| {
+            let h = GetClipboardData(u32::from(CF_UNICODETEXT.0)).ok()?;
+            let mem = HGLOBAL(h.0);
+            let ptr = GlobalLock(mem).cast::<u16>();
+            if ptr.is_null() {
+                return None;
+            }
+            let cap = (GlobalSize(mem) / 2).min(max_chars);
+            let slice = std::slice::from_raw_parts(ptr, cap);
+            let len = slice.iter().position(|&c| c == 0).unwrap_or(cap);
+            let text = String::from_utf16_lossy(&slice[..len]);
+            let _ = GlobalUnlock(mem);
+            Some(text)
         })();
         let _ = CloseClipboard();
         res

@@ -93,3 +93,21 @@ Reproducir:
 ```bash
 cargo run --release -p rukes-plugins --example files_bench
 ```
+
+## Fase 3: sistema de scripts (2026-11-04)
+
+Binario `rukes.exe` release: **12,2 MB** (8,5 MB en la fase 2; Rhai añade ~3,7 MB).
+
+| Métrica | Objetivo | Medido | Estado |
+| --- | --- | --- | --- |
+| RNF-001 RAM en reposo (oculta) | ≤ 20 MB working set | **1,9 MB WS** tras recorte · 26 MB privada | ✅ |
+| RNF-005 Arranque hasta «listo» | ≤ 300 ms | 61–66 ms | ✅ |
+| Script colgado con `timeout 2s` | se cancela sin afectar al launcher | terminado a los 2 019 ms; el launcher siguió respondiendo | ✅ |
+| Script PowerShell (`gh issue Mi bug`) | — | 597–705 ms de principio a fin (arranque de `pwsh`) | — |
+
+**Notas:**
+
+- Memoria privada: 26 MB recién arrancado (23,3 MB en la fase 2). Tras ejecutar scripts y mostrar
+  listas largas llegó a 40 MB; el working set vuelve a ~2–7 MB al ocultar.
+- Las medidas se tomaron con una copia portable (`portable.txt`) para no tocar la configuración
+  del usuario.
