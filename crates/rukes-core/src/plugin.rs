@@ -20,7 +20,7 @@ pub struct PluginMetadata {
 }
 
 /// Qué hacer con la ventana tras ejecutar una acción.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ActionOutcome {
     /// Ocultar el launcher.
     Hide,
@@ -30,6 +30,9 @@ pub enum ActionOutcome {
     ReplaceQuery(String),
     /// Mostrar un mensaje breve y mantenerlo abierto.
     Notify(String),
+    /// Sustituir la lista por estos resultados (confirmaciones, submenús). El motor rellena su
+    /// `plugin_id`.
+    ShowResults(Vec<crate::ResultItem>),
 }
 
 /// Error de un plugin.

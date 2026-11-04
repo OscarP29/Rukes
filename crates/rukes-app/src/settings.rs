@@ -52,3 +52,20 @@ pub fn reference_height(c: &Config) -> f32 {
     let rows = c.window.max_results.clamp(1, 20) as f32;
     56.0 + 1.0 + rows * 48.0 + 12.0
 }
+
+pub fn files(c: &Config) -> rukes_plugins::FilesSettings {
+    let f = &c.plugins.files;
+    rukes_plugins::FilesSettings {
+        roots: f
+            .roots
+            .iter()
+            .map(|r| rukes_plugins::files::expand_root(r))
+            .collect(),
+        exclude: f.exclude.clone(),
+        include_hidden: f.include_hidden,
+        min_chars: f.min_chars,
+        priority: f.priority,
+        shell: c.plugins.shell.shell.clone(),
+        terminal: c.general.terminal.clone(),
+    }
+}

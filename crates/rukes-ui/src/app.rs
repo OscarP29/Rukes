@@ -287,6 +287,10 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.execute(s.selected, &action)
                 }
                 Key::Character("c") if m.control() => s.execute(s.selected, ActionId::COPY_PATH),
+                Key::Character("o") if m.control() => s.execute(s.selected, ActionId::OPEN_WITH),
+                Key::Character("t") if m.control() => {
+                    s.execute(s.selected, ActionId::TERMINAL_HERE)
+                }
                 _ => Task::none(),
             }
         }
@@ -327,6 +331,15 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.notice = Some(n);
                     s.resize()
                 }
+                Ok(ActionOutcome::ShowResults(items)) => {
+                    // Cancela la consulta en curso para que sus lotes no pisen esta lista.
+                    s.qid = s.host.query("", Arc::new(|_| {}));
+                    s.results = items;
+                    s.selected = 0;
+                    s.offset = 0;
+                    s.stale = false;
+                    Task::batch([s.load_visible_icons(), s.resize()])
+                }
                 Err(e) => {
                     s.notice = Some(format!("{}: {e}", tr("error.action")));
                     s.resize()
@@ -348,13 +361,50 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
     }
 }
 
+/// Icono de texto para los plugins integrados (`Icon::Named`).
+fn glyph<'a>(name: &str) -> Element<'a, Message> {
+    let symbol = match name {
+        "calc" => "=",
+        "web" => "@",
+        "shell" => ">_",
+        "window" => "[]",
+        "process" => "ps",
+        "generator" => "#",
+        "folder" => "/",
+        "system" => "sys",
+        _ => "·",
+    };
+    container(
+        text(symbol)
+            .size(13)
+            .font(Font::MONOSPACE)
+            .color(theme::ACCENT),
+    )
+    .width(theme::ICON)
+    .height(theme::ICON)
+    .center_x(theme::ICON)
+    .center_y(theme::ICON)
+    .style(|_| container::Style {
+        background: Some(Background::Color(theme::SELECTION)),
+        border: Border {
+            radius: 6.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
 fn result_row<'a>(s: &'a State, i: usize, item: &'a ResultItem) -> Element<'a, Message> {
     let icon: Element<'_, Message> = match s.icons.get(&item.icon) {
         Some(Some(h)) => image(h.clone())
             .width(theme::ICON)
             .height(theme::ICON)
             .into(),
-        _ => space().width(theme::ICON).height(theme::ICON).into(),
+        _ => match &item.icon {
+            Icon::Named(name) => glyph(name),
+            _ => space().width(theme::ICON).height(theme::ICON).into(),
+        },
     };
     let texts = column![
         text(item.title.as_str())

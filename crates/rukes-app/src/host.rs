@@ -1,6 +1,6 @@
 //! Orquestación: implementa [`rukes_ui::Host`] y conecta el motor, la plataforma y la config.
 
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
@@ -8,8 +8,12 @@ use rukes_config::{Config, ConfigError, Hotkey};
 use rukes_core::i18n::tr;
 use rukes_core::{ActionOutcome, Engine, Icon, Plugin, QueryId, ResultItem};
 use rukes_platform::hotkey::{self, HotkeyManager};
-use rukes_platform::{dwm, icons, window};
-use rukes_plugins::AppsPlugin;
+use rukes_platform::tray::{MenuEntry, Tray};
+use rukes_platform::{autostart, dwm, icons, window};
+use rukes_plugins::{
+    AppsPlugin, CalcPlugin, FileIndex, FilesPlugin, GeneratorsPlugin, ProcessesPlugin, ShellPlugin,
+    ShellSettings, SystemCommandsPlugin, WebPlugin, WindowsPlugin,
+};
 use rukes_ui::{Host, IconRgba, Sink, UiEvent, UiSender};
 
 use crate::settings;
@@ -19,6 +23,29 @@ use crate::system_plugin::SystemPlugin;
 const REINDEX_AFTER: Duration = Duration::from_secs(10 * 60);
 /// Espera tras ocultar antes de liberar el working set (por si se vuelve a mostrar enseguida).
 const TRIM_AFTER: Duration = Duration::from_millis(1500);
+
+const TRAY_SHOW: u16 = 1;
+const TRAY_SETTINGS: u16 = 2;
+const TRAY_RELOAD: u16 = 3;
+const TRAY_PAUSE: u16 = 4;
+const TRAY_QUIT: u16 = 5;
+
+/// Nombre del valor en la clave `Run`.
+const AUTOSTART_NAME: &str = "Rukes";
+
+/// Activa o quita el inicio con Windows según la config (RF-008).
+pub fn apply_autostart(config: &Config) {
+    let command = config
+        .general
+        .start_with_windows
+        .then(|| std::env::current_exe().ok())
+        .flatten()
+        .map(|exe| format!("\"{}\"", exe.display()));
+    match autostart::set(AUTOSTART_NAME, command.as_deref()) {
+        Ok(()) => tracing::debug!(enabled = command.is_some(), "inicio con Windows aplicado"),
+        Err(e) => tracing::warn!(%e, "no se pudo cambiar el inicio con Windows"),
+    }
+}
 
 struct Inner {
     config: Config,
@@ -39,6 +66,10 @@ pub struct AppHost {
     shown_at: Mutex<Option<Instant>>,
     inner: Mutex<Inner>,
     me: Mutex<Weak<AppHost>>,
+    /// Índice de archivos; se conserva entre recargas de config si sus ajustes no cambian.
+    files: Mutex<Option<Arc<FileIndex>>>,
+    tray: Mutex<Option<Tray>>,
+    paused: AtomicBool,
 }
 
 impl AppHost {
@@ -63,6 +94,9 @@ impl AppHost {
                 last_refresh: Instant::now(),
             }),
             me: Mutex::new(Weak::new()),
+            files: Mutex::new(None),
+            tray: Mutex::new(None),
+            paused: AtomicBool::new(false),
         }
     }
 
@@ -84,15 +118,76 @@ impl AppHost {
                 rukes_plugins::apps::cache_file(&self.paths.cache_dir),
             )));
         }
-        let quit_engine = Arc::clone(&self.engine);
-        let frecency_file = self.paths.frecency_file();
+        if config.plugins.calc.enabled {
+            plugins.push(Arc::new(CalcPlugin {
+                prefix: config.plugins.calc.prefix.clone(),
+                auto: config.plugins.calc.auto,
+            }));
+        }
+        if config.plugins.web.enabled {
+            plugins.push(Arc::new(WebPlugin {
+                engines: config.plugins.web.engines.clone(),
+            }));
+        }
+        let sh = &config.plugins.shell;
+        if sh.enabled {
+            plugins.push(Arc::new(ShellPlugin {
+                settings: ShellSettings {
+                    prefix: sh.prefix.clone(),
+                    shell: sh.shell.clone(),
+                    terminal: config.general.terminal.clone(),
+                    keep_open: sh.keep_open,
+                },
+                cwd: std::env::var_os("USERPROFILE").map(std::path::PathBuf::from),
+            }));
+            plugins.push(Arc::new(SystemCommandsPlugin {
+                confirm: sh.confirm_system,
+            }));
+        }
+        let g = &config.plugins.generators;
+        if g.enabled {
+            plugins.push(Arc::new(GeneratorsPlugin {
+                password_length: g.password_length,
+                password_symbols: g.password_symbols,
+            }));
+        }
+        if config.plugins.windows.enabled {
+            plugins.push(Arc::new(WindowsPlugin {
+                priority: config.plugins.windows.priority,
+            }));
+        }
+        if config.plugins.processes.enabled {
+            plugins.push(Arc::new(ProcessesPlugin::new(
+                config.plugins.processes.priority,
+            )));
+        }
+        let mut files = self.files.lock().unwrap_or_else(|p| p.into_inner());
+        if config.plugins.files.enabled {
+            let wanted = settings::files(config);
+            let index = match files.as_ref() {
+                Some(i) if *i.settings() == wanted => Arc::clone(i),
+                _ => {
+                    let i = FileIndex::new(wanted, self.paths.cache_dir.join("files.bin"));
+                    i.rescan(false);
+                    i
+                }
+            };
+            for v in FilesPlugin::variants(&index) {
+                plugins.push(Arc::new(v));
+            }
+            *files = Some(index);
+        } else {
+            *files = None;
+        }
+        drop(files);
+        let quit_host = Arc::downgrade(self);
         let reload_engine = Arc::clone(&self.engine);
         plugins.push(Arc::new(SystemPlugin {
             config_file: self.paths.config_file(),
             on_quit: Box::new(move || {
-                let _ = quit_engine.save_frecency(&frecency_file);
-                tracing::info!("salida pedida por el usuario");
-                std::process::exit(0);
+                if let Some(h) = quit_host.upgrade() {
+                    h.quit();
+                }
             }),
             on_reload: Box::new(move || reload_engine.refresh_all()),
         }));
@@ -234,12 +329,102 @@ impl AppHost {
                 }
             }
         }
-        if old.general.hotkey != config.general.hotkey {
+        if old.general.start_with_windows != config.general.start_with_windows {
+            apply_autostart(&config);
+        }
+        if old.general.hotkey != config.general.hotkey && !self.paused.load(Ordering::SeqCst) {
             let me = self.me.lock().ok().and_then(|w| w.upgrade());
             if let Some(me) = me {
                 me.start_hotkey(&config.general.hotkey);
             }
         }
+    }
+
+    /// Crea el icono de la bandeja (RF-007).
+    pub fn start_tray(self: &Arc<Self>) {
+        let menu_host = Arc::downgrade(self);
+        let click_host = Arc::downgrade(self);
+        let cmd_host = Arc::downgrade(self);
+        let tray = Tray::spawn(
+            "Rukes",
+            move || {
+                let Some(h) = menu_host.upgrade() else {
+                    return Vec::new();
+                };
+                let paused = h.paused.load(Ordering::SeqCst);
+                let hotkey = h.inner().config.general.hotkey.clone();
+                vec![
+                    MenuEntry::Item(TRAY_SHOW, format!("{} ({hotkey})", tr("tray.show"))),
+                    MenuEntry::Item(TRAY_SETTINGS, tr("tray.settings").to_owned()),
+                    MenuEntry::Item(TRAY_RELOAD, tr("tray.reload").to_owned()),
+                    MenuEntry::Item(
+                        TRAY_PAUSE,
+                        tr(if paused { "tray.resume" } else { "tray.pause" }).to_owned(),
+                    ),
+                    MenuEntry::Separator,
+                    MenuEntry::Item(TRAY_QUIT, tr("tray.quit").to_owned()),
+                ]
+            },
+            move || {
+                if let Some(h) = click_host.upgrade() {
+                    h.toggle(true);
+                }
+            },
+            move |id| {
+                if let Some(h) = cmd_host.upgrade() {
+                    h.tray_command(id);
+                }
+            },
+        );
+        match tray {
+            Ok(t) => *self.tray.lock().unwrap_or_else(|p| p.into_inner()) = Some(t),
+            Err(e) => tracing::warn!(%e, "no se pudo crear el icono de la bandeja"),
+        }
+    }
+
+    fn tray_command(self: &Arc<Self>, id: u16) {
+        match id {
+            TRAY_SHOW => self.toggle(true),
+            TRAY_SETTINGS => {
+                if let Err(e) = crate::system_plugin::open_config(&self.paths.config_file()) {
+                    self.notice(format!("{}: {e}", tr("error.action")));
+                }
+            }
+            TRAY_RELOAD => {
+                self.inner().last_refresh = Instant::now();
+                if let Some(f) = self.files.lock().ok().and_then(|f| f.clone()) {
+                    f.rescan(true);
+                }
+                self.engine.refresh_all();
+            }
+            TRAY_PAUSE => self.set_paused(!self.paused.load(Ordering::SeqCst)),
+            TRAY_QUIT => self.quit(),
+            _ => {}
+        }
+    }
+
+    /// Pausa: libera el atajo global hasta reanudar.
+    pub fn set_paused(self: &Arc<Self>, paused: bool) {
+        self.paused.store(paused, Ordering::SeqCst);
+        if paused {
+            let mut inner = self.inner();
+            inner.hotkey = None;
+            inner.hotkey_text.clear();
+            tracing::info!("atajo en pausa");
+        } else {
+            let text = self.inner().config.general.hotkey.clone();
+            self.start_hotkey(&text);
+        }
+    }
+
+    /// Guarda el estado, quita el icono de la bandeja y termina el proceso.
+    pub fn quit(&self) {
+        tracing::info!("salida pedida por el usuario");
+        self.shutdown();
+        if let Some(t) = self.tray.lock().ok().and_then(|mut t| t.take()) {
+            t.remove_now();
+        }
+        std::process::exit(0);
     }
 
     pub fn shutdown(&self) {

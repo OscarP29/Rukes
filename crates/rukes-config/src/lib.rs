@@ -83,6 +83,9 @@ mod tests {
         assert_eq!(c.general.hotkey, d.general.hotkey);
         assert_eq!(c.window.max_results, d.window.max_results);
         assert_eq!(c.search.frecency_weight, d.search.frecency_weight);
+        // Las secciones de plugins de la plantilla coinciden con los valores por defecto.
+        assert_eq!(c.general, d.general);
+        assert_eq!(c.plugins, d.plugins);
     }
 
     #[test]

@@ -63,3 +63,33 @@ Benchmark de búsqueda:
 ```bash
 cargo bench -p rukes-core --bench search
 ```
+
+## Fase 2: plugins esenciales (2026-11-04)
+
+Binario `rukes.exe` release: **8,5 MB** (6,0 MB en la fase 1). Índices: 452 apps y 70 813
+archivos de las carpetas del usuario.
+
+| Métrica | Objetivo | Medido | Estado |
+| --- | --- | --- | --- |
+| RNF-001 RAM en reposo (oculta) | ≤ 20 MB working set | **2,5 MB WS** tras recorte · 23,3 MB privada | ✅ |
+| RNF-004 Búsqueda de archivos, 500 000 entradas | ≤ 16 ms | p95 9–14 ms según la consulta (8 hilos) | ✅ |
+| RNF-005 Arranque hasta «listo» | ≤ 300 ms | 62–80 ms en caliente (~22 ms dentro de `main`) | ✅ (ver nota) |
+| RNF-007 Índice de 500 000 archivos | ≤ 60 MB extra | **25,9 MB** extra (24,5 MB contabilizados) | ✅ |
+| Índice real (70 813 entradas) | — | 2,3 MB · recorrido 2,5–7 s · caché 2–3 ms | — |
+| Caché de 500 000 entradas | — | 14,7 MB en disco · guardar 15 ms · cargar 17 ms | — |
+
+**Notas:**
+
+- **RNF-005:** en la fase 1 eran 28–43 ms. Lo que pasa dentro de `main` sigue en ~22 ms; el resto
+  es la carga del proceso (binario más grande y más DLL importadas: energía, ToolHelp, etc.).
+  El icono de la bandeja ya no bloquea el arranque.
+- **RNF-007:** cada entrada ocupa 12 bytes más su nombre en un único `String`; las rutas se
+  reconstruyen subiendo por los padres. La búsqueda descarta primero por subsecuencia ASCII y
+  solo puntúa con `nucleo` lo que pasa, en bloques paralelos con un top-K por hilo.
+- Durante un recorrido completo conviven el índice viejo y el nuevo (memoria ×2 temporal).
+
+Reproducir:
+
+```bash
+cargo run --release -p rukes-plugins --example files_bench
+```

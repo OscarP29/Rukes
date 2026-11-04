@@ -32,6 +32,15 @@ crossbeam-channel = "0.5"
 nucleo-matcher = "0.3"
 iced = { version = "=0.14.0", default-features = false, features = ["tiny-skia", "advanced", "image-without-codecs", "thread-pool", "crisp", "web-colors"] }
 windows = "0.62"
+fend-core = "1.5"
+uuid = { version = "1.18", features = ["v4", "v7"] }
+sha1 = "0.11"
+sha2 = "0.11"
+md-5 = "0.11"
+crc32fast = "1.5"
+base64 = "0.23"
+getrandom = "0.4"
+globset = "0.4"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

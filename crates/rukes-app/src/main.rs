@@ -67,6 +67,8 @@ fn main() -> anyhow::Result<()> {
     host.install_plugins(&config);
     engine.refresh_all();
     host.start_hotkey(&config.general.hotkey);
+    host.start_tray();
+    host::apply_autostart(&config);
     if let Some(e) = config_error {
         let _ = ui_tx.unbounded_send(UiEvent::Notice(format!(
             "{}: {e}",

@@ -13,6 +13,17 @@ rukes-platform.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+fend-core.workspace = true
+uuid.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+md-5.workspace = true
+crc32fast.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+globset.workspace = true
+notify.workspace = true
+crossbeam-channel.workspace = true
 
 [lints]
 workspace = true

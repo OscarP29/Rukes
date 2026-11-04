@@ -200,9 +200,20 @@ impl Engine {
                 tracing::error!(plugin = %item.plugin_id, "pánico al ejecutar una acción");
                 Err(PluginError::Failed("el plugin falló".into()))
             });
-        if result.is_ok() {
-            lock(&self.shared.frecency).record(raw_query, &item.key(), now_secs());
-            self.shared.frecency_dirty.store(true, Ordering::Relaxed);
+        let mut result = result;
+        match &mut result {
+            Ok(ActionOutcome::ShowResults(items)) => {
+                // Un submenú o confirmación no cuenta como uso.
+                for (n, it) in items.iter_mut().enumerate() {
+                    it.plugin_id.clone_from(&item.plugin_id);
+                    it.score = 1.0 - n as f32 * 0.001;
+                }
+            }
+            Ok(_) => {
+                lock(&self.shared.frecency).record(raw_query, &item.key(), now_secs());
+                self.shared.frecency_dirty.store(true, Ordering::Relaxed);
+            }
+            Err(_) => {}
         }
         result
     }
@@ -249,10 +260,11 @@ fn route(plugins: &[Registered], raw: &str) -> Vec<(usize, String, bool)> {
     if let Some((i, len)) = by_prefix {
         return vec![(i, trimmed[len..].trim().to_owned(), true)];
     }
-    // 2. Palabra clave como primera palabra.
+    // 2. Palabra clave como primera palabra, seguida de un espacio (`g` a secas sigue siendo una
+    // búsqueda global; `g ` ya va al buscador web).
     let mut parts = trimmed.splitn(2, char::is_whitespace);
-    if let Some(first) = parts.next() {
-        let rest = parts.next().unwrap_or("").trim();
+    if let (Some(first), Some(rest)) = (parts.next(), parts.next()) {
+        let rest = rest.trim();
         for (i, r) in plugins.iter().enumerate() {
             if r.meta
                 .keywords
@@ -457,6 +469,10 @@ mod tests {
         let b = collect(&e, "kill chr", Duration::from_millis(200));
         assert_eq!(b.len(), 1);
         assert_eq!(b[0].plugin_id, "proc");
+        // Sin espacio, la palabra clave no dirige la búsqueda.
+        let b = collect(&e, "kill", Duration::from_millis(200));
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].plugin_id, "apps");
     }
 
     #[test]

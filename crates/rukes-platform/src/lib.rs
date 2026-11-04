@@ -4,15 +4,21 @@
 //! Las funciones públicas son seguras y reciben los `HWND` como [`Hwnd`] (un `isize`).
 
 pub mod apps;
+pub mod autostart;
 pub mod clipboard;
 pub mod com;
 pub mod dwm;
 pub mod hotkey;
 pub mod icons;
 pub mod instance;
+pub mod power;
+pub mod process;
 pub mod shell;
 pub mod sysinfo;
+pub mod time;
+pub mod tray;
 pub mod window;
+pub mod winlist;
 
 /// Handle de ventana como entero, para poder enviarlo entre hilos.
 pub type Hwnd = isize;

@@ -8,6 +8,19 @@ use rukes_core::{
 };
 use rukes_platform::shell::{self, Verb};
 
+/// Abre `config.toml` con su programa asociado o, si no hay, con el Bloc de notas.
+pub fn open_config(file: &std::path::Path) -> rukes_platform::Result<()> {
+    let file = file.to_string_lossy();
+    shell::launch(&file, None, None, Verb::Open).or_else(|_| {
+        shell::launch(
+            "notepad.exe",
+            Some(&format!("\"{file}\"")),
+            None,
+            Verb::Open,
+        )
+    })
+}
+
 type Callback = Box<dyn Fn() + Send + Sync>;
 
 /// Plugin `rukes`.
@@ -97,21 +110,9 @@ impl Plugin for SystemPlugin {
                 (self.on_reload)();
                 Ok(ActionOutcome::Hide)
             }
-            "config" => {
-                let file = self.config_file.to_string_lossy();
-                // Sin asociación para .toml, `open` falla: se usa el Bloc de notas.
-                shell::launch(&file, None, None, Verb::Open)
-                    .or_else(|_| {
-                        shell::launch(
-                            "notepad.exe",
-                            Some(&format!("\"{file}\"")),
-                            None,
-                            Verb::Open,
-                        )
-                    })
-                    .map(|()| ActionOutcome::Hide)
-                    .map_err(|e| PluginError::Failed(e.to_string()))
-            }
+            "config" => open_config(&self.config_file)
+                .map(|()| ActionOutcome::Hide)
+                .map_err(|e| PluginError::Failed(e.to_string())),
             other => Err(PluginError::Failed(format!("comando desconocido: {other}"))),
         }
     }

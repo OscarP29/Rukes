@@ -4,6 +4,37 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 2: plugins esenciales
+
+#### Añadido
+- Calculadora (`=` y automática): operaciones, porcentajes, unidades con nombres en español
+  (`5 km a millas`), temperaturas, hora en otras ciudades (`hora en Tokio`), días hasta una
+  fecha, `hoy`/`ahora`. Usa `fend-core`.
+- Web: URLs escritas directamente y búsquedas con palabra clave (`g`, `ddg`, `yt`, `gh`, `wiki`,
+  `crate`, `docs`) configurables.
+- Shell (`>`): comandos en `pwsh`/`powershell`/`cmd`/`nu` dentro de Windows Terminal o de la
+  consola, como administrador con `Ctrl+Enter`, y URIs `shell:`/`ms-settings:`.
+- Comandos del sistema: bloquear, suspender, hibernar, apagar, reiniciar, cerrar sesión y vaciar
+  la papelera, con confirmación configurable.
+- Ventanas abiertas: buscar por título o ejecutable y traerlas al frente (restaurando).
+- Procesos (`kill`, `ps`): agrupados por ejecutable con RAM y CPU, cada proceso por separado,
+  confirmación antes de terminar, opción de terminar el árbol y procesos del sistema protegidos.
+- Generadores: UUID v4/v7, contraseñas, lorem ipsum, timestamps; hashes MD5, SHA-1, SHA-256,
+  SHA-512 y CRC32 de texto o archivo; Base64, URL, HTML y hex.
+- Archivos: índice propio compacto (12 bytes por entrada + nombre), caché binaria, watcher con
+  actualización incremental por carpeta, exclusiones glob, `f:`/`d:` y filtro por extensión;
+  acciones abrir, ubicación, copiar ruta, abrir con… (`Ctrl+O`) y terminal aquí (`Ctrl+T`).
+- Icono en la bandeja con menú (Mostrar, Configuración, Recargar, Pausar/Reanudar atajo, Salir)
+  e inicio con Windows (`start_with_windows`).
+- Núcleo: `ActionOutcome::ShowResults` para confirmaciones y listas que devuelve una acción.
+- Plantilla `config.toml` con todas las secciones nuevas; test que la compara con los valores
+  por defecto.
+- `docs/checklists/fase-2.md`, métricas de la fase 2 y benchmark `files_bench`.
+
+#### Cambiado
+- Una palabra clave solo dirige la búsqueda si va seguida de un espacio (`g` a secas sigue
+  buscando apps; `g rust` busca en la web).
+
 ### Fase 1 — MVP: invocar, buscar, abrir
 
 #### Añadido

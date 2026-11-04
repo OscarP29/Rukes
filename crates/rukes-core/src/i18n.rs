@@ -46,6 +46,8 @@ pub fn tr(key: &str) -> &str {
         "action.run_as_admin" => ("Abrir como administrador", "Run as administrator"),
         "action.open_location" => ("Abrir ubicación", "Open file location"),
         "action.copy_path" => ("Copiar ruta", "Copy path"),
+        "action.open_with" => ("Abrir con…", "Open with…"),
+        "action.terminal_here" => ("Abrir terminal aquí", "Open terminal here"),
         "apps.packaged" => ("Aplicación de la Tienda", "Store app"),
         "apps.path" => ("Ejecutable en PATH", "Executable on PATH"),
         "notify.copied" => ("Copiado al portapapeles", "Copied to clipboard"),
@@ -63,6 +65,13 @@ pub fn tr(key: &str) -> &str {
         "system.reload.sub" => ("Vuelve a indexar las aplicaciones", "Re-index applications"),
         "system.config" => ("Abrir configuración de Rukes", "Open Rukes settings"),
         "error.action" => ("No se pudo completar la acción", "The action failed"),
+        "calc.enter_copies" => ("Enter copia", "Enter copies"),
+        "tray.show" => ("Mostrar", "Show"),
+        "tray.settings" => ("Configuración", "Settings"),
+        "tray.reload" => ("Recargar índices", "Reload indexes"),
+        "tray.pause" => ("Pausar atajo", "Pause hotkey"),
+        "tray.resume" => ("Reanudar atajo", "Resume hotkey"),
+        "tray.quit" => ("Salir", "Quit"),
         _ => return key,
     };
     match language() {

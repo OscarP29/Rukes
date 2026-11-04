@@ -15,6 +15,10 @@ impl ActionId {
     pub const OPEN_LOCATION: &'static str = "open_location";
     /// Copiar la ruta (`Ctrl+C`).
     pub const COPY_PATH: &'static str = "copy_path";
+    /// «Abrir con...» (`Ctrl+O`).
+    pub const OPEN_WITH: &'static str = "open_with";
+    /// Abrir una terminal en la carpeta (`Ctrl+T`).
+    pub const TERMINAL_HERE: &'static str = "terminal_here";
 
     /// Crea un id a partir de un texto.
     pub fn new(s: impl Into<String>) -> Self {

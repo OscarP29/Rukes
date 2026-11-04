@@ -2,7 +2,7 @@
 
 Launcher de productividad y automatización para Windows 10/11, escrito en Rust: ligero, rápido y con la automatización como ciudadano de primera clase.
 
-> Estado: **Fase 1** (MVP): busca y abre aplicaciones con `Alt+Space`. La especificación completa está en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
+> Estado: **Fase 2**: apps, archivos, calculadora, web, shell, ventanas, procesos y generadores con `Alt+Space`. La especificación completa está en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
 
 ## Compilar
 
@@ -16,8 +16,20 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 
 ## Uso
 
-1. Ejecuta `rukes.exe`. Queda residente y sin ventana.
+1. Ejecuta `rukes.exe`. Queda residente, con un icono en la bandeja.
 2. Pulsa `Alt+Space` y escribe (`chr` → Google Chrome).
+
+| Escribe | Resultado |
+| --- | --- |
+| `chr`, `informe` | Apps y archivos de tus carpetas |
+| `f: informe`, `d: proyectos`, `contrato .pdf` | Solo archivos, solo carpetas, por extensión |
+| `= 5 km a millas`, `2^10`, `70 F en C` | Calculadora y conversiones (sin `=` también, si parece una operación) |
+| `hora en Tokio`, `días hasta 25 dic` | Hora y fechas |
+| `github.com`, `g rust lifetimes`, `yt lofi` | Abrir URL o buscar en la web |
+| `> dir`, `> shell:startup` | Comando en la terminal o URI del shell |
+| `bloquear`, `apagar`, `vaciar papelera` | Comandos del sistema (con confirmación) |
+| `win code`, `kill chrome`, `ps` | Ventanas abiertas y procesos |
+| `uuid`, `pass 24`, `sha256 texto`, `b64 texto` | Generadores, hashes y codificadores (Enter copia) |
 
 | Tecla | Acción |
 | --- | --- |
@@ -25,12 +37,15 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `Ctrl+Enter` | Abrir como administrador |
 | `Ctrl+Shift+Enter` | Abrir la carpeta contenedora |
 | `Ctrl+C` | Copiar la ruta |
+| `Ctrl+O` | Abrir con… (archivos) |
+| `Ctrl+T` | Abrir una terminal en la carpeta |
 | `↑` `↓` / `Tab` / `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
 | `Esc` | Ocultar |
 
 - **Configuración:** `%APPDATA%\Rukes\config.toml`, que se crea comentado en el primer arranque y
   se aplica al guardar. También puedes abrirla escribiendo «configuración» en el launcher.
-- **Salir:** escribe «salir» en el launcher.
+- **Salir:** escribe «salir» en el launcher o usa el menú del icono de la bandeja.
+- **Iniciar con Windows:** `start_with_windows = true` en `[general]`.
 - **Logs:** `%LOCALAPPDATA%\Rukes\logs`.
 
 ## Estructura

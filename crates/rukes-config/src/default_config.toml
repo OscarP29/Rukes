@@ -7,6 +7,10 @@
 hotkey = "Alt+Space"
 # Idioma: "auto" (el del sistema), "es" o "en".
 language = "auto"
+# Iniciar Rukes al entrar en Windows (clave Run del usuario).
+start_with_windows = false
+# Terminal para los comandos de shell y «abrir terminal aquí»: "wt" (Windows Terminal) o "none".
+terminal = "wt"
 
 [window]
 # "center" o "top_center".
@@ -35,3 +39,73 @@ include_path = true
 # alias = "Nombre de la app tal y como aparece en el menú Inicio"
 # c = "Google Chrome"
 # code = "Visual Studio Code"
+
+[plugins.calc]
+# Calculadora, unidades, temperaturas y fechas: "= 5 km a millas", "70 F en C", "hora en Tokio",
+# "días hasta 25 dic".
+enabled = true
+prefix = "="
+# Evaluar sin prefijo cuando la consulta parece una operación ("2+2", "20% de 340").
+auto = true
+
+[plugins.web]
+# URLs escritas directamente y búsquedas con palabra clave: "g rust lifetimes", "yt lofi".
+enabled = true
+
+[plugins.web.engines]
+# palabra clave = URL con {q} en el lugar de la búsqueda. Si defines esta tabla, sustituye a la
+# lista por defecto: copia las que quieras conservar.
+g = "https://www.google.com/search?q={q}"
+ddg = "https://duckduckgo.com/?q={q}"
+yt = "https://www.youtube.com/results?search_query={q}"
+gh = "https://github.com/search?q={q}"
+wiki = "https://es.wikipedia.org/w/index.php?search={q}"
+crate = "https://crates.io/search?q={q}"
+docs = "https://docs.rs/releases/search?query={q}"
+
+[plugins.shell]
+# "> comando" lo ejecuta; "> shell:startup" o "> ms-settings:display" abre la URI.
+# También activa los comandos del sistema: bloquear, suspender, apagar, reiniciar...
+enabled = true
+prefix = ">"
+# "pwsh", "powershell", "cmd" o "nu".
+shell = "pwsh"
+# No cerrar la terminal al terminar el comando.
+keep_open = true
+# Pedir confirmación antes de apagar, reiniciar, cerrar sesión, vaciar la papelera...
+confirm_system = true
+
+[plugins.windows]
+# Cambiar a una ventana abierta escribiendo su título ("win" a secas las lista todas).
+enabled = true
+priority = 0.0
+
+[plugins.processes]
+# "kill chrome" o "ps": procesos con RAM y CPU; Enter pide confirmación antes de terminar.
+enabled = true
+priority = 0.0
+
+[plugins.generators]
+# uuid, pass 16, lorem 3, ts, md5/sha1/sha256/sha512/crc32 <texto o ruta>, b64, b64d, url,
+# urld, html, htmld, hex, unhex.
+enabled = true
+password_length = 20
+password_symbols = true
+
+[plugins.files]
+# Índice propio de archivos. "f:" solo archivos, "d:" solo carpetas, ".pdf" filtra por extensión.
+enabled = true
+priority = -0.15
+roots = ["~/Desktop", "~/Documents", "~/Downloads", "~/Pictures", "~/Videos", "~/Music"]
+exclude = [
+  "**/node_modules",
+  "**/.git",
+  "**/target",
+  "**/__pycache__",
+  "**/.venv",
+  "**/AppData",
+  "**/$RECYCLE.BIN",
+]
+include_hidden = false
+# Caracteres mínimos para buscar archivos sin prefijo.
+min_chars = 3
