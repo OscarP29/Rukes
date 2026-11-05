@@ -86,8 +86,16 @@ pub struct Colors {
     pub selection: Rgba,
     /// Texto de la fila seleccionada.
     pub selection_foreground: Rgba,
-    /// Separadores.
+    /// Separadores y bordes (token `border`).
     pub divider: Rgba,
+    /// Fondo de tarjetas y controles. `None`: derivado del fondo y el texto.
+    pub surface: Option<Rgba>,
+    /// Fondo al pasar el ratón. `None`: derivado.
+    pub surface_hover: Option<Rgba>,
+    /// Texto terciario (etiquetas pequeñas). `None`: entre `muted` y el fondo.
+    pub text_faint: Option<Rgba>,
+    /// Acento suave (fondos con acento). `None`: el acento con transparencia.
+    pub accent_soft: Option<Rgba>,
 }
 
 /// Fuentes.
@@ -159,6 +167,10 @@ impl Default for Theme {
                 selection: Rgba([0x28, 0x34, 0x57, 217]),
                 selection_foreground: fg,
                 divider: muted.with_alpha(0.35),
+                surface: None,
+                surface_hover: None,
+                text_faint: None,
+                accent_soft: None,
             },
             font: Fonts {
                 family: "Segoe UI Variable Text".into(),
@@ -179,13 +191,24 @@ impl Default for Theme {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct FileColors {
+    #[serde(alias = "bg")]
     background: Option<Rgba>,
+    #[serde(alias = "text")]
     foreground: Option<Rgba>,
+    #[serde(alias = "text_muted", alias = "text-muted")]
     muted: Option<Rgba>,
     accent: Option<Rgba>,
     selection: Option<Rgba>,
     selection_foreground: Option<Rgba>,
+    #[serde(alias = "border")]
     divider: Option<Rgba>,
+    surface: Option<Rgba>,
+    #[serde(alias = "surface-hover")]
+    surface_hover: Option<Rgba>,
+    #[serde(alias = "text-faint")]
+    text_faint: Option<Rgba>,
+    #[serde(alias = "accent-soft")]
+    accent_soft: Option<Rgba>,
 }
 
 #[derive(Deserialize, Default)]
@@ -255,6 +278,10 @@ pub const BUILTIN: &[(&str, &str)] = &[
     ("gruvbox", include_str!("../../../themes/gruvbox.toml")),
     ("nord", include_str!("../../../themes/nord.toml")),
     ("dracula", include_str!("../../../themes/dracula.toml")),
+    (
+        "rukes-dark",
+        include_str!("../../../themes/rukes-dark.toml"),
+    ),
     ("midnight", include_str!("../../../themes/midnight.toml")),
     (
         "rukes-light",
@@ -399,6 +426,30 @@ fn load_depth(name: &str, user_dir: &Path, depth: usize) -> Result<Theme, Config
     let c = f.colors;
     let fg_changed = c.foreground.is_some();
     let muted_changed = c.muted.is_some();
+    let bg_changed = c.background.is_some();
+    let accent_changed = c.accent.is_some();
+    // Un tema que cambia el fondo, el texto o el acento sin fijar los tokens que dependen de
+    // ellos los vuelve a derivar (no hereda los de su base, que no casarían).
+    if bg_changed || fg_changed {
+        t.colors.surface = None;
+        t.colors.surface_hover = None;
+    }
+    if bg_changed || muted_changed {
+        t.colors.text_faint = None;
+    }
+    if accent_changed {
+        t.colors.accent_soft = None;
+    }
+    for (slot, v) in [
+        (&mut t.colors.surface, c.surface),
+        (&mut t.colors.surface_hover, c.surface_hover),
+        (&mut t.colors.text_faint, c.text_faint),
+        (&mut t.colors.accent_soft, c.accent_soft),
+    ] {
+        if v.is_some() {
+            *slot = v;
+        }
+    }
     macro_rules! set {
         ($($field:ident),*) => { $( if let Some(v) = c.$field { t.colors.$field = v; } )* };
     }
@@ -489,12 +540,46 @@ mod tests {
     }
 
     #[test]
+    fn tokens_are_inherited_or_derived() {
+        let dark = load("rukes-dark", &no_user_dir()).unwrap();
+        assert_eq!(dark.colors.surface, Rgba::parse("#171a21"));
+        assert_eq!(dark.colors.divider, Rgba::parse("#262b36").unwrap());
+        let dir = std::env::temp_dir().join(format!("rukes-tokens-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("hijo.toml"),
+            "[theme]
+extends = \"rukes-dark\"
+[theme.colors]
+bg = \"#202020\"
+text-faint = \"#555555\"
+",
+        )
+        .unwrap();
+        let t = load("hijo", &dir).unwrap();
+        assert_eq!(t.colors.background, Rgba::parse("#202020").unwrap());
+        assert_eq!(t.colors.surface, None, "otro fondo: se deriva");
+        assert_eq!(t.colors.text_faint, Rgba::parse("#555555"));
+        assert_eq!(
+            t.colors.accent_soft, dark.colors.accent_soft,
+            "mismo acento: se hereda"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn every_builtin_theme_loads() {
-        for (k, _) in BUILTIN {
+        for (k, src) in BUILTIN {
             let t = load(k, &no_user_dir()).unwrap_or_else(|e| panic!("{k}: {e}"));
             assert!(!t.name.is_empty());
             assert_ne!(t.colors.background, t.colors.foreground, "{k}");
-            assert_eq!(t.colors.divider, t.colors.muted.with_alpha(0.35), "{k}");
+            // Sin borde propio, se deriva del secundario.
+            if !src
+                .lines()
+                .any(|l| l.starts_with("border =") || l.starts_with("divider ="))
+            {
+                assert_eq!(t.colors.divider, t.colors.muted.with_alpha(0.35), "{k}");
+            }
             assert_eq!(t.colors.selection_foreground, t.colors.foreground, "{k}");
         }
         assert!(!load("catppuccin-latte", &no_user_dir()).unwrap().dark);

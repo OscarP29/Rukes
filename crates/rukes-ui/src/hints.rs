@@ -1,13 +1,14 @@
 //! Leyenda de comandos con la búsqueda vacía: ejemplos clicables para no tener que recordar
-//! los prefijos y un recordatorio de las teclas. Se muestran en una columna; cuántos y cuáles
-//! se eligen en `[window] hints_count` / `hints_items`.
+//! los prefijos y un recordatorio de las teclas. Cada ejemplo es una fila con el comando y su
+//! descripción; cuántos y cuáles se eligen en `[window] hints_count` / `hints_items`.
 
-use iced::widget::{button, column, container, row, space, text};
-use iced::{Background, Border, Color, Element, Length};
+use iced::widget::text::Wrapping;
+use iced::widget::{button, column, container, row, text};
+use iced::{Background, Border, Element, Length};
 use rukes_core::i18n::tr;
 
 use crate::app::Message;
-use crate::theme::Look;
+use crate::theme::{self, Look};
 
 /// Un ejemplo de la leyenda.
 #[derive(Debug, PartialEq, Eq)]
@@ -78,34 +79,47 @@ pub fn selected(items: &[String], count: usize) -> Vec<&'static Hint> {
 }
 
 /// Alto de cada ejemplo.
-const ROW_H: f32 = 28.0;
-/// Alto de la cabecera y del pie.
-const BAR_H: f32 = 28.0;
+const ROW_H: f32 = 32.0;
+/// Alto de la etiqueta «SUGERENCIAS».
+const LABEL_H: f32 = 26.0;
+/// Alto del pie con las teclas.
+const FOOTER_H: f32 = 28.0;
 /// Margen vertical.
-const PAD: f32 = 6.0;
-/// Ancho de la columna de ejemplos.
+const PAD: f32 = 8.0;
+/// Margen horizontal exterior.
+const SIDE: f32 = 12.0;
+/// Margen horizontal dentro de cada fila.
+const ROW_PAD: f32 = 10.0;
+/// Ancho de la columna de comandos.
 const SHOWN_W: f32 = 140.0;
+/// Separación entre comando y descripción.
+const GAP: f32 = 12.0;
 
 /// Alto total de la leyenda con `rows` ejemplos.
 pub fn height(rows: usize) -> f32 {
-    PAD * 2.0 + BAR_H * 2.0 + rows as f32 * ROW_H
+    PAD * 2.0 + LABEL_H + FOOTER_H + rows as f32 * ROW_H
 }
 
-fn hint<'a>(l: &Look, h: &'static Hint) -> Element<'a, Message> {
-    let (accent, muted, hover, radius) = (l.accent, l.muted, l.selection, l.radius);
+fn hint<'a>(l: &Look, h: &'static Hint, desc_chars: usize) -> Element<'a, Message> {
+    let (accent, muted, hover, radius) = (l.accent, l.muted, l.surface_hover, l.radius);
     button(
         row![
             text(h.shown)
                 .font(l.mono)
-                .size(l.small())
+                .size(l.desc())
                 .color(accent)
+                .wrapping(Wrapping::None)
                 .width(Length::Fixed(SHOWN_W)),
-            text(tr(h.key)).size(l.small()).color(muted),
+            text(theme::ellipsis(tr(h.key), desc_chars))
+                .size(l.desc())
+                .color(muted)
+                .wrapping(Wrapping::None)
+                .width(Length::Fill),
         ]
-        .spacing(8)
+        .spacing(GAP)
         .align_y(iced::Alignment::Center),
     )
-    .padding([0.0, 10.0])
+    .padding([0.0, ROW_PAD])
     .height(ROW_H)
     .width(Length::Fill)
     .on_press(Message::Hint(h.insert.to_owned()))
@@ -122,76 +136,43 @@ fn hint<'a>(l: &Look, h: &'static Hint) -> Element<'a, Message> {
     .into()
 }
 
-/// Botón pequeño de la cabecera: icono y texto.
-fn bar_button<'a>(l: &Look, icon: &'a str, label: &'a str, msg: Message) -> Element<'a, Message> {
-    let (fg, muted, hover, radius) = (l.fg, l.muted, l.selection, l.radius);
-    button(
-        row![
-            text(icon)
-                .font(crate::panel::icon_font())
-                .size(l.small())
-                .color(muted),
-            text(label).size(l.small()).color(muted),
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center),
+/// Leyenda: la etiqueta «SUGERENCIAS», los ejemplos (comando y descripción en dos columnas,
+/// cada fila clicable) y un recordatorio de las teclas. `width`: ancho de la ventana.
+pub fn view<'a>(l: &Look, hints: &[&'static Hint], width: f32) -> Element<'a, Message> {
+    let faint = l.faint;
+    let label = container(
+        text(tr("hints.title").to_uppercase())
+            .size(l.small() - 1.0)
+            .font(iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..l.font
+            })
+            .color(faint),
     )
-    .padding([3.0, 8.0])
-    .on_press(msg)
-    .style(move |_, status| button::Style {
-        background: matches!(status, button::Status::Hovered | button::Status::Pressed)
-            .then_some(Background::Color(hover)),
-        text_color: fg,
-        border: Border {
-            radius: radius.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    })
-    .into()
-}
+    .height(LABEL_H)
+    .padding([0.0, ROW_PAD])
+    .align_y(iced::alignment::Vertical::Center);
 
-/// Leyenda: título con los botones «Nuevo» y «Ajustes», los ejemplos en una columna y las
-/// teclas.
-pub fn view<'a>(l: &Look, hints: &[&'static Hint]) -> Element<'a, Message> {
-    let (fg, muted) = (l.fg, l.muted);
-    let header = row![
-        text(tr("hints.title")).size(l.small()).color(fg),
-        space().width(Length::Fill),
-        bar_button(
-            l,
-            crate::panel::ICON_ADD,
-            tr("hints.new_button"),
-            Message::Hint("new ".into())
-        ),
-        bar_button(
-            l,
-            crate::panel::ICON_SETTINGS,
-            tr("hints.settings"),
-            Message::OpenSettings
-        ),
-    ]
-    .spacing(4)
-    .align_y(iced::Alignment::Center)
-    .height(BAR_H)
-    .padding([0.0, 10.0]);
-
+    let desc_w = width - SIDE * 2.0 - ROW_PAD * 2.0 - SHOWN_W - GAP;
+    let desc_chars = theme::fit_chars(desc_w, l.desc());
     let mut list = column![].spacing(0);
     for h in hints {
-        list = list.push(hint(l, h));
+        list = list.push(hint(l, h, desc_chars));
     }
 
     let footer = container(
         text(tr("hints.keys"))
-            .size(l.small() - 1.0)
-            .color(Color { a: 0.85, ..muted }),
+            .size(l.small())
+            .color(faint)
+            .wrapping(Wrapping::None),
     )
-    .height(BAR_H)
-    .padding([0.0, 10.0])
-    .align_y(iced::alignment::Vertical::Center);
+    .height(FOOTER_H)
+    .padding([0.0, ROW_PAD])
+    .align_y(iced::alignment::Vertical::Center)
+    .clip(true);
 
-    container(column![header, list, footer])
-        .padding([PAD, 8.0])
+    container(column![label, list, footer])
+        .padding([PAD, SIDE])
         .width(Length::Fill)
         .height(height(hints.len()))
         .into()

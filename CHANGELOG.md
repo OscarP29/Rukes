@@ -4,6 +4,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Interfaz más ordenada
+
+#### Añadido
+- Tokens de tema `surface`, `surface_hover`, `text_faint` y `accent_soft` (y los alias `bg`,
+  `text`, `text_muted`, `border`). Si un tema no los define se derivan de sus colores.
+- Temas base «Rukes Oscuro» (`rukes-dark`) y «Rukes Claro» (`rukes-light`, nueva paleta); son
+  los predeterminados del modo oscuro y claro.
+- Pie de atajos bajo los resultados: la acción principal a la izquierda y hasta dos atajos que
+  apliquen a la fila (Ctrl+↵ administrador, Ctrl+P vista previa) en pastillas.
+- Separadores finos con el nombre del grupo cuando la lista mezcla plugins.
+- Ajustes agrupados en tarjetas con título; contador «n de m elegidos» en la leyenda.
+
+#### Cambiado
+- Leyenda: etiqueta «SUGERENCIAS», comando y descripción corta en dos columnas, filas
+  clicables; 6 ejemplos por defecto.
+- Filas: icono centrado, título y subtítulo cortados con «…» (las rutas por el medio); las
+  tareas muestran su estado como etiqueta a la derecha.
+- «Nuevo» y «Ajustes» pasan a ser iconos con descripción junto a la búsqueda.
+- Ajustes: pestaña activa con barra de acento, filas más altas, casillas en una columna y
+  «Guardar» desactivado legible.
+
 ### Mini Postman visual
 
 #### Añadido

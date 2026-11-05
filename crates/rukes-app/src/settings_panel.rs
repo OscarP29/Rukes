@@ -51,6 +51,17 @@ fn number(key: &str, label: &str, (min, max, step): (i64, i64, i64), value: i64)
 }
 
 /// `(valor, clave de i18n)` → opciones traducidas.
+/// Título de una tarjeta de ajustes (agrupa los que le siguen).
+fn heading(label: &str) -> SettingField {
+    SettingField {
+        key: String::new(),
+        label: tr(label).into(),
+        help: String::new(),
+        kind: SettingKind::Heading,
+        value: SettingValue::Bool(false),
+    }
+}
+
 fn opts(list: &[(&str, &str)]) -> Vec<(String, String)> {
     list.iter()
         .map(|(v, k)| ((*v).to_owned(), tr(k).to_owned()))
@@ -95,6 +106,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
     let general = SettingsSection {
         title: tr("settings.tab_general").into(),
         fields: vec![
+            heading("settings.group_look"),
             choice(
                 "general.theme",
                 "settings.theme",
@@ -127,6 +139,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 ]),
                 &g.language,
             ),
+            heading("settings.group_system"),
             SettingField {
                 key: "general.hotkey".into(),
                 label: tr("settings.hotkey").into(),
@@ -155,6 +168,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
     let window = SettingsSection {
         title: tr("settings.tab_window").into(),
         fields: vec![
+            heading("settings.group_size"),
             choice(
                 "window.position",
                 "settings.position",
@@ -178,6 +192,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 (1, 20, 1),
                 i64::try_from(w.max_results).unwrap_or(8),
             ),
+            heading("settings.group_hints"),
             toggle(
                 "window.hints",
                 "settings.hints",
@@ -188,7 +203,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 "window.hints_count",
                 "settings.hints_count",
                 (1, i64::try_from(hint_options.len()).unwrap_or(16), 1),
-                i64::try_from(w.hints_count).unwrap_or(8),
+                i64::try_from(w.hints_count).unwrap_or(6),
             ),
             SettingField {
                 key: "window.hints_items".into(),
@@ -201,6 +216,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 }),
                 kind: SettingKind::Multi(hint_options),
             },
+            heading("settings.group_behavior"),
             choice(
                 "window.on_show",
                 "settings.on_show",
@@ -362,6 +378,8 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
 pub fn edits(changes: &[(String, SettingValue)]) -> Result<Vec<(String, EditValue)>, String> {
     changes
         .iter()
+        // Los títulos de las tarjetas no son ajustes.
+        .filter(|(key, _)| !key.is_empty())
         .map(|(key, v)| {
             let value = match v {
                 SettingValue::Bool(b) => EditValue::Bool(*b),

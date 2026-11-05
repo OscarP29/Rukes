@@ -206,7 +206,8 @@ pub fn create_theme(dir: &Path, name: &str, base: &str) -> Result<(String, PathB
          # accent = \"{accent}\"\n\
          # selection = \"{sel}\"\n\
          # selection_foreground = \"{selfg}\"\n\
-         # divider = \"{div}\"\n\
+         # divider = \"{div}\"         # también «border»\n\
+         {tokens}\
          \n\
          [theme.font]\n\
          # family = {family}\n\
@@ -232,6 +233,18 @@ pub fn create_theme(dir: &Path, name: &str, base: &str) -> Result<(String, PathB
         sel = c.selection,
         selfg = c.selection_foreground,
         div = c.divider,
+        tokens = [
+            ("surface", c.surface),
+            ("surface_hover", c.surface_hover),
+            ("text_faint", c.text_faint),
+            ("accent_soft", c.accent_soft),
+        ]
+        .iter()
+        .map(|(k, v)| match v {
+            Some(v) => format!("# {k} = \"{v}\"\n"),
+            None => format!("# {k}: derivado de los demás colores\n"),
+        })
+        .collect::<String>(),
         family = toml_str(&t.font.family),
         size = t.font.size,
         mono = toml_str(&t.font.mono),

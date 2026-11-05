@@ -48,6 +48,12 @@ const PREVIEW_ROWS: usize = 6;
 const PREVIEW_LINES: usize = 40;
 /// Botones de acción como máximo en una fila (además de la acción principal).
 const ROW_ACTIONS: usize = 5;
+/// Alto del separador de grupo de la lista.
+const GROUP_H: f32 = 24.0;
+/// Margen horizontal de la lista.
+const LIST_SIDE: f32 = 8.0;
+/// Alto del pie de atajos.
+const FOOTER_H: f32 = 32.0;
 /// Icono de «ver detalles» (Segoe MDL2 Assets).
 const ICON_DETAILS: &str = "\u{E946}";
 
@@ -187,8 +193,8 @@ fn iced_theme(l: &Look) -> Theme {
             text: l.fg,
             primary: l.accent,
             success: l.accent,
-            warning: Color::from_rgb8(0xe0, 0xaf, 0x68),
-            danger: Color::from_rgb8(0xf7, 0x76, 0x8e),
+            warning: l.warning,
+            danger: l.danger,
         },
     )
 }
@@ -243,6 +249,32 @@ impl State {
         }
     }
 
+    /// Separadores de grupo de la lista: uno por cada tramo de resultados del mismo plugin, si
+    /// hay más de uno (con un solo grupo no hacen falta).
+    fn group_headers(&self) -> usize {
+        let mut runs = 0;
+        let mut prev: Option<&str> = None;
+        for it in self
+            .results
+            .iter()
+            .skip(self.offset)
+            .take(self.visible_rows())
+        {
+            if prev != Some(it.plugin_id.as_str()) {
+                runs += 1;
+                prev = Some(it.plugin_id.as_str());
+            }
+        }
+        if runs >= 2 { runs } else { 0 }
+    }
+
+    /// Alto de la lista con sus separadores.
+    fn list_height(&self) -> f32 {
+        self.list_rows() as f32 * self.look.row_h
+            + self.group_headers() as f32 * GROUP_H
+            + theme::LIST_PAD * 2.0
+    }
+
     /// Ejemplos de la leyenda según la configuración.
     fn hint_list(&self) -> Vec<&'static hints::Hint> {
         hints::selected(&self.cfg.hints_items, self.cfg.hints_count)
@@ -283,7 +315,7 @@ impl State {
         let rows = self.list_rows();
         let mut h = self.look.search_h;
         if rows > 0 {
-            h += 1.0 + rows as f32 * self.look.row_h + theme::LIST_PAD * 2.0;
+            h += 1.0 + self.list_height() + 1.0 + FOOTER_H;
         } else if self.hints_visible() {
             h += 1.0 + hints::height(self.hint_list().len());
         }
@@ -424,7 +456,12 @@ impl State {
         }
         self.selected = sel;
         self.offset = offset;
-        Task::batch([self.load_visible_icons(), self.load_preview()])
+        // Al desplazarse pueden cambiar los separadores de grupo (y con ellos el alto).
+        Task::batch([
+            self.load_visible_icons(),
+            self.load_preview(),
+            self.resize(),
+        ])
     }
 
     fn execute(&mut self, idx: usize, action: &str) -> Task<Message> {
@@ -1268,6 +1305,85 @@ fn row_actions<'a>(
     any.then(|| buttons.into())
 }
 
+/// Ancho aproximado de un botón de acción de la fila.
+const ACTION_W: f32 = 30.0;
+
+/// Botones que tendrá la fila a la derecha (para reservar su hueco).
+fn action_count(item: &ResultItem) -> usize {
+    item.actions.len().saturating_sub(1).min(ROW_ACTIONS)
+        + usize::from(item.preview.is_some() || item.detail.is_some())
+}
+
+/// Ancho aproximado de la etiqueta pequeña de una fila.
+fn chip_width(l: &Look, s: &str) -> f32 {
+    s.chars().count() as f32 * (l.small() - 1.0) * 0.55 + 18.0
+}
+
+/// Etiqueta pequeña a la derecha de una fila («Pendiente · 2 en total»).
+fn chip<'a>(l: &Look, label: &'a str) -> Element<'a, Message> {
+    let (bg, border, muted) = (l.surface_hover, l.divider, l.muted);
+    container(
+        txt(label)
+            .size(l.small() - 1.0)
+            .color(muted)
+            .wrapping(Wrapping::None),
+    )
+    .padding([2.0, 8.0])
+    .style(move |_| container::Style {
+        background: Some(Background::Color(bg)),
+        border: Border {
+            radius: 10.0.into(),
+            width: 1.0,
+            color: border,
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// Nombre visible de un grupo de resultados (el del plugin que los da).
+fn group_label(id: &str) -> String {
+    let key = match id {
+        "clipboard" => "clip",
+        "syscmd" => "system",
+        other => other,
+    };
+    rukes_core::i18n::lookup(&format!("{key}.name")).map_or_else(
+        || {
+            let mut c = id.chars();
+            c.next()
+                .map(|f| f.to_uppercase().chain(c).collect())
+                .unwrap_or_default()
+        },
+        str::to_owned,
+    )
+}
+
+/// Separador fino con el nombre del grupo.
+fn group_header<'a>(l: &Look, label: String) -> Element<'a, Message> {
+    container(
+        row![
+            txt(label.to_uppercase())
+                .size(l.small() - 1.0)
+                .font(iced::Font {
+                    weight: font::Weight::Semibold,
+                    ..l.font
+                })
+                .color(l.faint)
+                .wrapping(Wrapping::None),
+            divider(l.divider, false),
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center),
+    )
+    .height(GROUP_H)
+    .padding([0.0, l.pad])
+    .align_y(iced::alignment::Vertical::Center)
+    .into()
+}
+
+/// Fila de resultado: icono, título y subtítulo (cortados con «…»; las rutas por el medio) y, a
+/// la derecha, la etiqueta de las tareas y los botones (solo seleccionada o bajo el ratón).
 fn result_row<'a>(s: &'a State, l: &Look, i: usize, item: &'a ResultItem) -> Element<'a, Message> {
     let fade = s.fade.map_or(1.0, |a| a.at(s.now));
     let icon: Element<'_, Message> = match s.icons.get(&item.icon) {
@@ -1281,35 +1397,64 @@ fn result_row<'a>(s: &'a State, l: &Look, i: usize, item: &'a ResultItem) -> Ele
             _ => space().width(l.icon).height(l.icon).into(),
         },
     };
+    let icon = container(icon)
+        .width(l.icon)
+        .height(l.icon)
+        .center_x(l.icon)
+        .center_y(l.icon);
     let sel = selection_alpha(s, i);
     let selected = sel > 0.5;
-    let texts = column![
-        txt(item.title.as_str())
+    let hovered = s.hovered == Some(i);
+    let show_actions = (selected || hovered) && s.fade.is_none();
+    // Las tareas llevan su estado como etiqueta a la derecha en vez de como subtítulo.
+    let as_chip = item.plugin_id == "todo" && !item.subtitle.is_empty();
+
+    // Ancho para los textos: la lista menos márgenes, icono y lo que va a la derecha.
+    let mut text_w = s.cfg.width - LIST_SIDE * 2.0 - l.pad * 2.0 - l.icon - l.spacing;
+    if show_actions {
+        text_w -= action_count(item) as f32 * ACTION_W;
+    }
+    if as_chip {
+        text_w -= chip_width(l, &item.subtitle) + l.spacing;
+    }
+    let title = theme::ellipsis(&item.title, theme::fit_chars(text_w, l.size));
+    let mut texts = column![
+        txt(title)
             .size(l.size)
             .font(l.font)
             .color(if selected { l.sel_fg } else { l.fg })
             .wrapping(Wrapping::None),
-        txt(item.subtitle.as_str())
-            .size(l.small())
-            .font(l.font)
-            .color(if selected { l.sel_muted } else { l.muted })
-            .wrapping(Wrapping::None),
     ]
-    .spacing(1)
+    .spacing(2)
     .width(Length::Fill);
+    if !as_chip && !item.subtitle.is_empty() {
+        let n = theme::fit_chars(text_w, l.small());
+        let sub = if theme::looks_like_path(&item.subtitle) {
+            theme::ellipsis_middle(&item.subtitle, n)
+        } else {
+            theme::ellipsis(&item.subtitle, n)
+        };
+        texts = texts.push(
+            txt(sub)
+                .size(l.small())
+                .font(l.font)
+                .color(if selected { l.sel_muted } else { l.muted })
+                .wrapping(Wrapping::None),
+        );
+    }
     let bg = Color {
         a: l.selection.a * sel,
         ..l.selection
     };
+    let hover_bg = l.surface_hover;
     let radius = l.radius;
     let mut line = row![icon, texts]
         .spacing(l.spacing)
         .align_y(iced::Alignment::Center);
-    // Los botones aparecen en la fila seleccionada o bajo el ratón.
-    if (selected || s.hovered == Some(i))
-        && s.fade.is_none()
-        && let Some(actions) = row_actions(l, i, item, selected)
-    {
+    if as_chip {
+        line = line.push(chip(l, &item.subtitle));
+    }
+    if show_actions && let Some(actions) = row_actions(l, i, item, selected) {
         line = line.push(actions);
     }
     let body = container(line)
@@ -1319,7 +1464,13 @@ fn result_row<'a>(s: &'a State, l: &Look, i: usize, item: &'a ResultItem) -> Ele
         .align_y(iced::alignment::Vertical::Center)
         .clip(true)
         .style(move |_| container::Style {
-            background: (sel > 0.0).then_some(Background::Color(bg)),
+            background: if sel > 0.0 {
+                Some(Background::Color(bg))
+            } else if hovered {
+                Some(Background::Color(hover_bg))
+            } else {
+                None
+            },
             border: Border {
                 radius: radius.into(),
                 ..Border::default()
@@ -1504,6 +1655,104 @@ fn divider<'a>(c: Color, vertical: bool) -> Element<'a, Message> {
         .into()
 }
 
+/// Tecla en una pastilla pequeña, estilo `kbd`.
+fn kbd<'a>(l: &Look, key: &'a str) -> Element<'a, Message> {
+    let (bg, border) = (l.surface, l.divider);
+    container(
+        txt(key)
+            .size(l.small() - 1.0)
+            .color(Color { a: 0.92, ..l.fg })
+            .wrapping(Wrapping::None),
+    )
+    .padding([1.0, 6.0])
+    .style(move |_| container::Style {
+        background: Some(Background::Color(bg)),
+        border: Border {
+            radius: 4.0.into(),
+            width: 1.0,
+            color: border,
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// Atajo del pie: la tecla y lo que hace.
+fn key_hint<'a>(l: &Look, key: &'a str, label: &'a str) -> Element<'a, Message> {
+    row![
+        kbd(l, key),
+        txt(label)
+            .size(l.small())
+            .color(l.muted)
+            .wrapping(Wrapping::None),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Pie de la lista: a la izquierda la acción principal de la fila seleccionada y a la derecha
+/// como mucho dos atajos que tengan sentido para ella.
+fn footer<'a>(s: &'a State, l: &Look) -> Element<'a, Message> {
+    let mut left = row![].spacing(14).align_y(iced::Alignment::Center);
+    let mut right = row![].spacing(14).align_y(iced::Alignment::Center);
+    if let Some(item) = s.results.get(s.selected) {
+        if let Some(a) = item.actions.first() {
+            left = left.push(key_hint(l, "↵", tr(&a.title)));
+        }
+        let mut extra: Vec<(&'static str, &'static str)> = Vec::new();
+        if item.has_action(ActionId::RUN_AS_ADMIN)
+            && item.actions.first().map(|a| a.id.as_str()) != Some(ActionId::RUN_AS_ADMIN)
+        {
+            extra.push(("Ctrl+↵", tr("footer.admin")));
+        }
+        if item.preview.is_some() {
+            extra.push(("Ctrl+P", tr("footer.preview")));
+        } else if item.detail.is_some() {
+            extra.push(("Ctrl+P", tr("footer.details")));
+        }
+        for (k, label) in extra.into_iter().take(2) {
+            right = right.push(key_hint(l, k, label));
+        }
+    }
+    container(row![left, space().width(Length::Fill), right].align_y(iced::Alignment::Center))
+        .height(FOOTER_H)
+        .padding([0.0, l.pad + LIST_SIDE])
+        .align_y(iced::alignment::Vertical::Center)
+        .clip(true)
+        .into()
+}
+
+/// Botones de la cabecera, a la derecha de la búsqueda: «Nuevo» y «Ajustes» como iconos con
+/// su nombre al pasar el ratón.
+fn header_buttons<'a>(l: &Look) -> Element<'a, Message> {
+    let line = l.divider;
+    row![
+        container(space().width(1).height(20)).style(move |_| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        }),
+        icon_button(
+            l,
+            panel::ICON_ADD,
+            tr("hints.new_button"),
+            l.muted,
+            Message::Hint("new ".into()),
+        ),
+        icon_button(
+            l,
+            panel::ICON_SETTINGS,
+            tr("hints.settings"),
+            l.muted,
+            Message::OpenSettings,
+        ),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .padding([0.0, 14.0])
+    .into()
+}
+
 fn view(s: &State) -> Element<'_, Message> {
     let fade = s.fade.map_or(1.0, |a| a.at(s.now));
     let l = s.look.faded(fade);
@@ -1529,16 +1778,19 @@ fn view(s: &State) -> Element<'_, Message> {
             selection: Color { a: 0.45, ..accent },
         });
 
-    let search: Element<'_, Message> = container(input)
-        .height(l.search_h)
-        .align_y(iced::alignment::Vertical::Center)
-        .into();
+    // La búsqueda y los botones van siempre en la misma fila (el campo no se mueve).
+    let search: Element<'_, Message> = container(
+        row![input.width(Length::Fill), header_buttons(&l)].align_y(iced::Alignment::Center),
+    )
+    .height(l.search_h)
+    .align_y(iced::alignment::Vertical::Center)
+    .into();
     // Lo que va debajo de la búsqueda, de arriba abajo; anclada abajo se invierte y va encima.
     let mut parts: Vec<Element<'_, Message>> = Vec::new();
     let rows = s.visible_rows();
     if rows == 0 && s.hints_visible() {
         parts.push(divider(l.divider, false));
-        parts.push(hints::view(&l, &s.hint_list()));
+        parts.push(hints::view(&l, &s.hint_list(), s.cfg.width));
     }
     if rows > 0 {
         parts.push(divider(l.divider, false));
@@ -1552,15 +1804,20 @@ fn view(s: &State) -> Element<'_, Message> {
         if s.cfg.anchor_bottom {
             visible.reverse();
         }
-        let list = visible
-            .into_iter()
-            .fold(column![].spacing(0), |c, (i, item)| {
-                c.push(result_row(s, &l, i, item))
-            });
+        let groups = s.group_headers() > 0;
+        let mut list = column![].spacing(0);
+        let mut prev: Option<&str> = None;
+        for (i, item) in visible {
+            if groups && prev != Some(item.plugin_id.as_str()) {
+                list = list.push(group_header(&l, group_label(&item.plugin_id)));
+            }
+            prev = Some(item.plugin_id.as_str());
+            list = list.push(result_row(s, &l, i, item));
+        }
         let row_h = l.row_h;
         let list = mouse_area(
             container(list)
-                .padding([theme::LIST_PAD, 8.0])
+                .padding([theme::LIST_PAD, LIST_SIDE])
                 .width(s.cfg.width)
                 .height(Length::Fill),
         )
@@ -1573,12 +1830,14 @@ fn view(s: &State) -> Element<'_, Message> {
         if s.preview_on {
             parts.push(
                 row![list, divider(l.divider, true), preview_panel(s, &l)]
-                    .height(s.list_rows() as f32 * l.row_h + theme::LIST_PAD * 2.0)
+                    .height(s.list_height())
                     .into(),
             );
         } else {
             parts.push(list.into());
         }
+        parts.push(divider(l.divider, false));
+        parts.push(footer(s, &l));
     }
     if let Some(n) = &s.notice {
         parts.push(

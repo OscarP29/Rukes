@@ -17,8 +17,8 @@ terminal = "wt"
 # catppuccin-macchiato, catppuccin-mocha, gruvbox, nord, dracula, midnight (negro puro),
 # rukes-light.
 theme = "system"
-light_theme = "catppuccin-latte"
-dark_theme = "tokyo-night"
+light_theme = "rukes-light"
+dark_theme = "rukes-dark"
 
 [window]
 # "center", "top_center" o "bottom_center" (barra abajo, resultados hacia arriba).
@@ -41,7 +41,7 @@ preview_width = 340
 # Con la búsqueda vacía, mostrar una leyenda con los comandos más útiles (clic para usarlos).
 hints = true
 # Cuántos comandos muestra la leyenda.
-hints_count = 8
+hints_count = 6
 # Cuáles y en qué orden: calc, files, web, shell, clip, snip, note, todo, remind, controls,
 # windows, wall, workflows, http, new, help. Vacío = los de siempre.
 hints_items = []

@@ -5,8 +5,13 @@ name = "Rukes Claro"
 dark = false
 
 [theme.colors]
-background = "#f5f6f8"
-foreground = "#1f2328"
-accent = "#0969da"
-selection = "#dbe4f0"
-muted = "#6e7781"
+background = "#ffffff"       # bg
+surface = "#f5f6f8"          # tarjetas y controles
+surface_hover = "#eceef3"    # al pasar el ratón
+border = "#dfe2e8"           # separadores y bordes
+foreground = "#1c2030"       # text
+muted = "#5b6475"            # text-muted
+text_faint = "#8b93a3"       # etiquetas pequeñas
+accent = "#3b6fe0"
+accent_soft = "#3b6fe01f"    # fondos con acento
+selection = "#e4ebfb"        # fila seleccionada

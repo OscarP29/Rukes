@@ -4,12 +4,13 @@
 
 use std::fmt;
 
+use iced::widget::text::Wrapping;
 use iced::widget::{
     button, checkbox, column, container, pick_list, row, scrollable, slider, space, text,
     text_input, toggler,
 };
-use iced::{Background, Border, Color, Element, Font, Length};
-use rukes_core::i18n::tr;
+use iced::{Background, Border, Color, Element, Font, Length, Padding};
+use rukes_core::i18n::{tr, trf};
 
 use crate::app::Message;
 use crate::theme::Look;
@@ -28,13 +29,15 @@ pub const ICON_CLOSE: &str = "\u{E711}";
 pub const ICON_ADD: &str = "\u{E710}";
 
 /// Alto del cuerpo del panel (las pestañas y los ajustes).
-const BODY_H: f32 = 380.0;
+const BODY_H: f32 = 420.0;
 /// Alto del pie con los botones.
 const FOOTER_H: f32 = 52.0;
 /// Ancho mínimo del panel.
 pub const MIN_WIDTH: f32 = 640.0;
 /// Ancho de la columna de pestañas.
-const TABS_W: f32 = 150.0;
+const TABS_W: f32 = 160.0;
+/// Ancho de la columna de comandos en las casillas de la leyenda.
+const CMD_W: f32 = 130.0;
 /// Ancho de los controles.
 const CONTROL_W: f32 = 230.0;
 
@@ -114,7 +117,7 @@ impl fmt::Display for Opt {
 
 /// Botón plano que se resalta al pasar el ratón.
 fn flat<'a>(l: &Look, content: impl Into<Element<'a, Message>>) -> button::Button<'a, Message> {
-    let (fg, hover, radius) = (l.fg, l.selection, l.radius);
+    let (fg, hover, radius) = (l.fg, l.surface_hover, l.radius);
     button(content).style(move |_, status| button::Style {
         background: matches!(status, button::Status::Hovered | button::Status::Pressed)
             .then_some(Background::Color(hover)),
@@ -218,7 +221,8 @@ pub fn toggle_in(
         .collect()
 }
 
-/// Casillas en dos columnas.
+/// Casillas en una columna: casilla, comando (monoespaciado, acento) y descripción. Toda la
+/// fila es clicable.
 fn multi<'a>(
     l: &Look,
     s: usize,
@@ -226,32 +230,214 @@ fn multi<'a>(
     options: &'a [(String, String)],
     current: &'a [String],
 ) -> Element<'a, Message> {
-    let mut grid = column![].spacing(6);
-    for pair in options.chunks(2) {
-        let mut r = row![].spacing(12);
-        for (value, label) in pair {
-            let checked = current.contains(value);
-            r = r.push(
-                checkbox(checked)
-                    .label(label.as_str())
-                    .size(16)
-                    .text_size(l.small())
-                    .on_toggle(move |on| {
-                        Message::PanelSet(
-                            s,
-                            f,
-                            SettingValue::List(toggle_in(options, current, value, on)),
-                        )
-                    })
-                    .width(Length::FillPortion(1)),
-            );
-        }
-        if pair.len() < 2 {
-            r = r.push(space().width(Length::FillPortion(1)));
-        }
-        grid = grid.push(r);
+    let (accent, muted, hover, radius) = (l.accent, l.muted, l.surface_hover, l.radius);
+    let mut list = column![].spacing(0);
+    for (value, label) in options {
+        let (cmd, desc) = label.split_once(" — ").unwrap_or((label.as_str(), ""));
+        let checked = current.contains(value);
+        let set = move |on: bool| {
+            Message::PanelSet(
+                s,
+                f,
+                SettingValue::List(toggle_in(options, current, value, on)),
+            )
+        };
+        list = list.push(
+            button(
+                row![
+                    checkbox(checked).size(16).on_toggle(set),
+                    text(cmd)
+                        .font(l.mono)
+                        .size(l.desc())
+                        .color(accent)
+                        .wrapping(Wrapping::None)
+                        .width(Length::Fixed(CMD_W)),
+                    text(desc)
+                        .size(l.desc())
+                        .color(muted)
+                        .wrapping(Wrapping::None)
+                        .width(Length::Fill),
+                ]
+                .spacing(12)
+                .align_y(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .padding([6.0, 8.0])
+            .on_press(set(!checked))
+            .style(move |_, status| button::Style {
+                background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+                    .then_some(Background::Color(hover)),
+                text_color: muted,
+                border: Border {
+                    radius: radius.into(),
+                    ..Border::default()
+                },
+                ..button::Style::default()
+            }),
+        );
     }
-    grid.into()
+    list.into()
+}
+
+/// Pestaña de la navegación lateral; la activa lleva una barra de acento a la izquierda.
+fn nav_item<'a>(l: &Look, i: usize, title: &'a str, active: bool) -> Element<'a, Message> {
+    let (fg, muted, accent) = (l.fg, l.muted, l.accent);
+    let (surface, hover, radius) = (l.surface, l.surface_hover, l.radius);
+    let bar = container(space().width(3).height(18)).style(move |_| container::Style {
+        background: active.then_some(Background::Color(accent)),
+        border: Border {
+            radius: 2.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
+    button(
+        row![
+            bar,
+            text(title)
+                .size(l.desc())
+                .color(if active { fg } else { muted })
+                .wrapping(Wrapping::None),
+        ]
+        .spacing(9)
+        .align_y(iced::Alignment::Center),
+    )
+    .width(Length::Fill)
+    .padding([7.0, 6.0])
+    .on_press(Message::PanelTab(i))
+    .style(move |_, status| button::Style {
+        background: if active {
+            Some(Background::Color(hover))
+        } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+            Some(Background::Color(surface))
+        } else {
+            None
+        },
+        text_color: fg,
+        border: Border {
+            radius: radius.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    })
+    .into()
+}
+
+/// Tarjeta: título opcional y filas separadas por líneas finas.
+fn card<'a>(
+    l: &Look,
+    title: Option<&'a str>,
+    rows: Vec<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let (surface, border) = (l.surface, l.divider);
+    let mut col = column![].spacing(0);
+    if let Some(t) = title {
+        col = col.push(
+            container(
+                text(t.to_uppercase())
+                    .size(l.small() - 1.0)
+                    .font(Font {
+                        weight: iced::font::Weight::Semibold,
+                        ..l.font
+                    })
+                    .color(l.faint),
+            )
+            .padding(Padding {
+                top: 12.0,
+                bottom: 2.0,
+                ..Padding::ZERO
+            }),
+        );
+    }
+    for (k, r) in rows.into_iter().enumerate() {
+        if k > 0 {
+            col = col.push(line(border, false));
+        }
+        col = col.push(r);
+    }
+    container(col)
+        .padding([2.0, 16.0])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(Background::Color(surface)),
+            border: Border {
+                radius: 10.0.into(),
+                width: 1.0,
+                color: border,
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// Un ajuste: nombre y descripción a la izquierda y el control a la derecha (las casillas,
+/// debajo y a todo el ancho).
+fn setting_row<'a>(
+    l: &Look,
+    s: usize,
+    f: usize,
+    field: &'a crate::SettingField,
+    value: &'a SettingValue,
+) -> Element<'a, Message> {
+    let (fg, muted, faint) = (l.fg, l.muted, l.faint);
+    let mut label = column![text(field.label.as_str()).size(l.size - 1.0).color(fg)]
+        .spacing(3)
+        .width(Length::Fill);
+    if !field.help.is_empty() {
+        label = label.push(text(field.help.as_str()).size(l.small()).color(muted));
+    }
+    if let (SettingKind::Multi(options), SettingValue::List(current)) = (&field.kind, value) {
+        let n = options.iter().filter(|(v, _)| current.contains(v)).count();
+        let count = trf(
+            "settings.multi_count",
+            &[("n", &n), ("total", &options.len())],
+        );
+        return column![
+            row![label, text(count).size(l.small()).color(faint)]
+                .spacing(12)
+                .align_y(iced::Alignment::Center),
+            control(l, s, f, &field.kind, value),
+        ]
+        .spacing(8)
+        .padding([12.0, 0.0])
+        .into();
+    }
+    row![
+        label,
+        container(control(l, s, f, &field.kind, value))
+            .width(CONTROL_W)
+            .align_x(iced::alignment::Horizontal::Right),
+    ]
+    .spacing(16)
+    .align_y(iced::Alignment::Center)
+    .padding([12.0, 0.0])
+    .into()
+}
+
+/// Ajustes de una pestaña en tarjetas: cada título empieza una.
+fn cards<'a>(l: &Look, p: &'a Panel) -> Element<'a, Message> {
+    let mut out = column![].spacing(18);
+    let Some(section) = p.form.sections.get(p.tab) else {
+        return out.into();
+    };
+    let mut title: Option<&str> = None;
+    let mut rows: Vec<Element<'a, Message>> = Vec::new();
+    for (f, field) in section.fields.iter().enumerate() {
+        if matches!(field.kind, SettingKind::Heading) {
+            if !rows.is_empty() {
+                out = out.push(card(l, title, std::mem::take(&mut rows)));
+            }
+            title = Some(field.label.as_str());
+            continue;
+        }
+        if let Some(value) = p.values.get(p.tab).and_then(|v| v.get(f)) {
+            rows.push(setting_row(l, p.tab, f, field, value));
+        }
+    }
+    if !rows.is_empty() {
+        out = out.push(card(l, title, rows));
+    }
+    out.into()
 }
 
 /// Vista del panel.
@@ -288,100 +474,55 @@ pub fn view<'a>(p: &'a Panel, l: &Look, header_h: f32) -> Element<'a, Message> {
 
     let mut tabs = column![].spacing(2).width(TABS_W);
     for (i, section) in p.form.sections.iter().enumerate() {
-        let active = i == p.tab;
-        let (sel, radius) = (l.selection, l.radius);
-        tabs = tabs.push(
-            button(
-                text(section.title.as_str())
-                    .size(l.small())
-                    .color(if active { fg } else { muted }),
-            )
-            .width(Length::Fill)
-            .padding([7.0, 12.0])
-            .on_press(Message::PanelTab(i))
-            .style(move |_, status| button::Style {
-                background: (active
-                    || matches!(status, button::Status::Hovered | button::Status::Pressed))
-                .then_some(Background::Color(if active {
-                    sel
-                } else {
-                    Color {
-                        a: sel.a * 0.5,
-                        ..sel
-                    }
-                })),
-                text_color: fg,
-                border: Border {
-                    radius: radius.into(),
-                    ..Border::default()
-                },
-                ..button::Style::default()
-            }),
-        );
-    }
-
-    let mut fields = column![].spacing(14).padding([4.0, 16.0]);
-    if let Some(section) = p.form.sections.get(p.tab) {
-        for (f, field) in section.fields.iter().enumerate() {
-            let Some(value) = p.values.get(p.tab).and_then(|v| v.get(f)) else {
-                continue;
-            };
-            let mut label = column![text(field.label.as_str()).size(l.small() + 1.0).color(fg)]
-                .spacing(2)
-                .width(Length::Fill);
-            if !field.help.is_empty() {
-                label = label.push(text(field.help.as_str()).size(l.small() - 1.0).color(muted));
-            }
-            // Las casillas ocupan todo el ancho, debajo del nombre.
-            if matches!(field.kind, SettingKind::Multi(_)) {
-                fields = fields
-                    .push(column![label, control(l, p.tab, f, &field.kind, value)].spacing(8));
-                continue;
-            }
-            fields = fields.push(
-                row![
-                    label,
-                    container(control(l, p.tab, f, &field.kind, value))
-                        .width(CONTROL_W)
-                        .align_x(iced::alignment::Horizontal::Right),
-                ]
-                .spacing(16)
-                .align_y(iced::Alignment::Center),
-            );
-        }
+        tabs = tabs.push(nav_item(l, i, section.title.as_str(), i == p.tab));
     }
 
     let body = row![
-        container(tabs).padding([12.0, 8.0]).height(Length::Fill),
+        container(tabs).padding([14.0, 10.0]).height(Length::Fill),
         line(divider, true),
-        scrollable(container(fields).padding([12.0, 0.0])).height(Length::Fill),
+        scrollable(container(cards(l, p)).padding([16.0, 18.0])).height(Length::Fill),
     ]
     .height(BODY_H);
 
     let pending = p.changes().len();
     let status = match &p.error {
-        Some(e) => text(e.as_str())
+        Some(e) => text(e.as_str()).size(l.small()).color(l.danger),
+        None if pending > 0 => text(trf("settings.pending", &[("n", &pending)]))
             .size(l.small())
-            .color(Color::from_rgb8(0xf7, 0x76, 0x8e)),
-        None if pending > 0 => text(rukes_core::i18n::trf(
-            "settings.pending",
-            &[("n", &pending)],
-        ))
-        .size(l.small())
-        .color(muted),
-        None => text(tr("settings.hint")).size(l.small()).color(muted),
+            .color(muted),
+        None => text(tr("settings.hint")).size(l.small()).color(l.faint),
     };
-    let save = button(text(tr("settings.save")).size(l.small()))
-        .padding([6.0, 16.0])
-        .style(button::primary)
+    // Guardar: acento con el texto del color del fondo (contrasta en temas claros y oscuros);
+    // desactivado sigue legible sobre el acento suave.
+    let (soft, on_accent, radius) = (l.accent_soft, Color { a: 1.0, ..l.bg }, l.radius);
+    let save = button(text(tr("settings.save")).size(l.desc()))
+        .padding([7.0, 18.0])
+        .style(move |_, status| {
+            let (bg, text_color) = match status {
+                button::Status::Disabled => (soft, Color { a: 0.7, ..fg }),
+                button::Status::Hovered | button::Status::Pressed => {
+                    (Color { a: 0.88, ..accent }, on_accent)
+                }
+                button::Status::Active => (accent, on_accent),
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                text_color,
+                border: Border {
+                    radius: radius.into(),
+                    ..Border::default()
+                },
+                ..button::Style::default()
+            }
+        })
         .on_press_maybe((pending > 0 && !p.saving).then_some(Message::PanelSave));
-    let cancel = flat(l, text(tr("settings.cancel")).size(l.small()).color(fg))
-        .padding([6.0, 14.0])
+    let cancel = flat(l, text(tr("settings.cancel")).size(l.desc()).color(fg))
+        .padding([7.0, 16.0])
         .on_press(Message::PanelClose);
     let footer = row![status, space().width(Length::Fill), cancel, save]
-        .spacing(8)
+        .spacing(10)
         .align_y(iced::Alignment::Center)
-        .padding([0.0, 16.0])
+        .padding([0.0, 18.0])
         .height(FOOTER_H);
 
     column![

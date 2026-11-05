@@ -1,0 +1,17 @@
+# Tema incluido en Rukes. Copia este archivo a la carpeta "themes" de tu configuración para
+# modificarlo, o crea uno nuevo con extends = "rukes-dark" y cambia solo lo que quieras.
+[theme]
+name = "Rukes Oscuro"
+dark = true
+
+[theme.colors]
+background = "#0f1115"       # bg
+surface = "#171a21"          # tarjetas y controles
+surface_hover = "#1f2430"    # al pasar el ratón
+border = "#262b36"           # separadores y bordes
+foreground = "#e6e9ef"       # text
+muted = "#9aa3b2"            # text-muted
+text_faint = "#6b7385"       # etiquetas pequeñas
+accent = "#7aa2f7"
+accent_soft = "#7aa2f726"    # fondos con acento
+selection = "#1f2a40"        # fila seleccionada

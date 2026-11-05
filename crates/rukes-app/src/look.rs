@@ -96,6 +96,10 @@ pub fn ui_style(t: &Theme, sys: &System, translucent: bool) -> UiStyle {
         selection: c.selection.0,
         selection_foreground: c.selection_foreground.0,
         divider: c.divider.0,
+        surface: c.surface.map(|c| c.0),
+        surface_hover: c.surface_hover.map(|c| c.0),
+        text_faint: c.text_faint.map(|c| c.0),
+        accent_soft: c.accent_soft.map(|c| c.0),
         font: t.font.family.clone(),
         mono: t.font.mono.clone(),
         font_size: (t.font.size * k * 2.0).round() / 2.0,
@@ -116,6 +120,11 @@ pub fn ui_style(t: &Theme, sys: &System, translucent: bool) -> UiStyle {
         s.selection = Rgba::from_rgb(hc.highlight).0;
         s.selection_foreground = Rgba::from_rgb(hc.highlight_text).0;
         s.divider = text.0;
+        // En contraste alto nada se deriva de los colores del tema.
+        s.surface = Some(s.background);
+        s.surface_hover = Some(s.selection);
+        s.text_faint = Some(s.muted);
+        s.accent_soft = Some(s.selection);
         s.opacity = 1.0;
         s.solid_opacity = 1.0;
         s.translucent = false;
@@ -144,8 +153,8 @@ mod tests {
             dark: false,
             ..System::default()
         };
-        assert_eq!(theme_name(&c, &light), "catppuccin-latte");
-        assert_eq!(theme_name(&c, &System::default()), "tokyo-night");
+        assert_eq!(theme_name(&c, &light), "rukes-light");
+        assert_eq!(theme_name(&c, &System::default()), "rukes-dark");
         let t = Theme::default();
         assert_eq!(backdrop(&c, &t, &System::default()), Backdrop::Mica);
         let mut c2 = Config::default();

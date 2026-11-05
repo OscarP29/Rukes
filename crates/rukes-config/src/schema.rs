@@ -117,8 +117,8 @@ impl Default for General {
             start_with_windows: false,
             terminal: "wt".into(),
             theme: "system".into(),
-            light_theme: "catppuccin-latte".into(),
-            dark_theme: "tokyo-night".into(),
+            light_theme: "rukes-light".into(),
+            dark_theme: "rukes-dark".into(),
         }
     }
 }
@@ -201,7 +201,7 @@ impl Default for Window {
             preview_panel: false,
             preview_width: 340,
             hints: true,
-            hints_count: 8,
+            hints_count: 6,
             hints_items: Vec::new(),
         }
     }

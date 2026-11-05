@@ -334,21 +334,20 @@ fn tab_keys(k: KeyPress) -> Option<Binding<Message>> {
 /// Color de un método.
 fn method_color(m: &str, l: &Look) -> Color {
     match m {
-        "GET" => Color::from_rgb8(0x9e, 0xce, 0x6a),
-        "POST" => Color::from_rgb8(0xe0, 0xaf, 0x68),
-        "PUT" | "PATCH" => Color::from_rgb8(0x7a, 0xa2, 0xf7),
-        "DELETE" => Color::from_rgb8(0xf7, 0x76, 0x8e),
+        "GET" => l.success,
+        "POST" => l.warning,
+        "DELETE" => l.danger,
         _ => l.accent,
     }
 }
 
 /// Color de un código de estado.
-fn status_color(status: u32) -> Color {
+fn status_color(status: u32, l: &Look) -> Color {
     match status {
-        200..=299 => Color::from_rgb8(0x9e, 0xce, 0x6a),
-        300..=399 => Color::from_rgb8(0x7a, 0xa2, 0xf7),
-        400..=499 => Color::from_rgb8(0xe0, 0xaf, 0x68),
-        _ => Color::from_rgb8(0xf7, 0x76, 0x8e),
+        200..=299 => l.success,
+        300..=399 => l.accent,
+        400..=499 => l.warning,
+        _ => l.danger,
     }
 }
 
@@ -556,7 +555,7 @@ pub fn view<'a>(p: &'a HttpPanel, l: &Look) -> Element<'a, Message> {
                 .color(muted)
                 .into(),
             (Some(Ok(r)), None) => {
-                let sc = status_color(r.status);
+                let sc = status_color(r.status, l);
                 let mut sz = size(r.size);
                 if r.truncated {
                     sz.push('+');
@@ -611,10 +610,10 @@ pub fn view<'a>(p: &'a HttpPanel, l: &Look) -> Element<'a, Message> {
                 .into()
             }
             (Some(Err(_)), None) => row![
-                text("✕").size(l.small()).color(status_color(500)),
+                text("✕").size(l.small()).color(status_color(500, l)),
                 text(tr("httpui.error"))
                     .size(l.small())
-                    .color(status_color(500)),
+                    .color(status_color(500, l)),
                 space().width(Length::Fill),
                 shortcut(l, "Esc", tr("httpui.close").into(), Message::HttpClose),
             ]

@@ -14,6 +14,13 @@ muted = "#737aa2"
 # Valores por defecto de todos los temas (los demás los heredan si no los cambian).
 # divider = "#737aa259"         # separador; por defecto, muted con transparencia
 # selection_foreground = ""     # texto de la fila seleccionada; por defecto, foreground
+# Tokens de la interfaz (opcionales; si faltan se derivan de los colores de arriba). También
+# se aceptan los nombres bg, text, text_muted y border para background, foreground, muted y
+# divider.
+# surface = ""                  # tarjetas y controles; por defecto, el texto muy tenue
+# surface_hover = ""            # al pasar el ratón
+# text_faint = ""               # etiquetas pequeñas; por defecto, entre muted y el fondo
+# accent_soft = ""              # fondos con acento; por defecto, el acento con transparencia
 
 # backdrop = "mica"             # mica | acrylic | solid (si [window] backdrop = "auto")
 # opacity = 0.55                # opacidad del fondo sobre Mica/Acrílico

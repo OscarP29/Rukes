@@ -109,8 +109,11 @@ pub enum SettingKind {
     /// Texto libre (`SettingValue::Text`).
     Text,
     /// Varias opciones `(valor, etiqueta)` con casillas (`SettingValue::List`). El orden del
-    /// valor es el de las opciones.
+    /// valor es el de las opciones. Una etiqueta `comando — descripción` se muestra en dos
+    /// columnas.
     Multi(Vec<(String, String)>),
+    /// Título de una tarjeta: agrupa los ajustes que le siguen. No es un valor (clave vacía).
+    Heading,
 }
 
 /// Un ajuste del panel visual.
@@ -182,8 +185,16 @@ pub struct UiStyle {
     pub selection: Rgba8,
     /// Texto de la fila seleccionada.
     pub selection_foreground: Rgba8,
-    /// Separadores.
+    /// Separadores y bordes.
     pub divider: Rgba8,
+    /// Fondo de tarjetas y controles (`None`: derivado).
+    pub surface: Option<Rgba8>,
+    /// Fondo al pasar el ratón (`None`: derivado).
+    pub surface_hover: Option<Rgba8>,
+    /// Texto terciario (`None`: derivado).
+    pub text_faint: Option<Rgba8>,
+    /// Acento suave (`None`: derivado).
+    pub accent_soft: Option<Rgba8>,
     /// Fuente principal.
     pub font: String,
     /// Fuente monoespaciada.
@@ -218,6 +229,10 @@ impl Default for UiStyle {
             selection: [0x28, 0x34, 0x57, 217],
             selection_foreground: [0xc0, 0xca, 0xf5, 255],
             divider: [0x73, 0x7a, 0xa2, 89],
+            surface: None,
+            surface_hover: None,
+            text_faint: None,
+            accent_soft: None,
             font: "Segoe UI Variable Text".into(),
             mono: "Cascadia Mono".into(),
             font_size: 15.0,
@@ -288,7 +303,7 @@ impl Default for UiConfig {
             preview_width: 340.0,
             anchor_bottom: false,
             hints: true,
-            hints_count: 8,
+            hints_count: 6,
             hints_items: Vec::new(),
         }
     }
