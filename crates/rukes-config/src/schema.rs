@@ -237,6 +237,8 @@ pub struct Plugins {
     pub processes: PluginCommon,
     /// Volumen, brillo, Wi-Fi, Bluetooth, modo avión y modo oscuro (RF-063).
     pub controls: PluginCommon,
+    /// Peticiones HTTP (`http 3000/api`, `post :8080/login {...}`): un mini Postman.
+    pub http: PluginCommon,
     /// Generadores, hashes y codificadores.
     pub generators: Generators,
     /// Archivos y carpetas.

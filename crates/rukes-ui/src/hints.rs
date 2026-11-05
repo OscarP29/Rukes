@@ -22,6 +22,8 @@ const HINTS: &[(&str, &str, &str)] = &[
     ("win", "win ", "hints.windows"),
     ("wall", "wall ", "hints.wall"),
     ("workflows", "workflows", "hints.workflows"),
+    ("http 3000/api", "http ", "hints.http"),
+    ("help vol", "help ", "hints.help"),
 ];
 
 /// Columnas de la cuadrícula.

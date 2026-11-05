@@ -77,4 +77,10 @@ pub trait Plugin: Send + Sync {
 
     /// Reconstruye índices (llamado en segundo plano). Por defecto no hace nada.
     fn refresh(&self) {}
+
+    /// Ayuda de uso que muestra `help <comando>`. Por defecto la de los textos de la interfaz,
+    /// sección `[usage.<id>]` (ver [`PluginHelp::from_i18n`]); `None` si no tiene.
+    fn help(&self) -> Option<crate::PluginHelp> {
+        crate::PluginHelp::from_i18n(&self.metadata().id)
+    }
 }

@@ -7,10 +7,10 @@ use std::time::Duration;
 use windows::Win32::Networking::WinHttp::{
     URL_COMPONENTS, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE,
     WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP,
-    WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE, WinHttpCloseHandle, WinHttpConnect,
-    WinHttpCrackUrl, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryDataAvailable,
-    WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest,
-    WinHttpSetOption, WinHttpSetTimeouts,
+    WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_QUERY_STATUS_CODE,
+    WinHttpCloseHandle, WinHttpConnect, WinHttpCrackUrl, WinHttpOpen, WinHttpOpenRequest,
+    WinHttpQueryDataAvailable, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
+    WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts,
 };
 use windows::core::{PCWSTR, w};
 
@@ -21,8 +21,32 @@ use crate::{Context as _, PlatformError, Result, wide};
 pub struct Response {
     /// Código de estado.
     pub status: u32,
+    /// Texto del estado (`OK`, `Not Found`).
+    pub reason: String,
+    /// Cabeceras de la respuesta, en orden.
+    pub headers: Vec<(String, String)>,
     /// Cuerpo (se corta en `max_bytes`).
     pub body: Vec<u8>,
+    /// `true` si el cuerpo se cortó en `max_bytes`.
+    pub truncated: bool,
+}
+
+/// Separa las cabeceras en bruto (`HTTP/1.1 200 OK\r\nNombre: valor\r\n…`) en el texto del
+/// estado y los pares `(nombre, valor)`.
+fn parse_raw_headers(raw: &str) -> (String, Vec<(String, String)>) {
+    let mut lines = raw.split("\r\n");
+    let reason = lines
+        .next()
+        .and_then(|l| l.splitn(3, ' ').nth(2))
+        .unwrap_or("")
+        .trim()
+        .to_owned();
+    let headers = lines
+        .filter_map(|l| l.split_once(':'))
+        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
+        .filter(|(k, _)| !k.is_empty())
+        .collect();
+    (reason, headers)
 }
 
 /// Petición HTTP.
@@ -164,7 +188,38 @@ pub fn send(req: &Request<'_>) -> Result<Response> {
             std::ptr::null_mut(),
         )
         .ctx("WinHttpQueryHeaders")?;
+        // Cabeceras en bruto: primero se pide el tamaño (falla con buffer insuficiente).
+        let mut raw_len = 0u32;
+        let _ = WinHttpQueryHeaders(
+            request.0,
+            WINHTTP_QUERY_RAW_HEADERS_CRLF,
+            PCWSTR::null(),
+            None,
+            &mut raw_len,
+            std::ptr::null_mut(),
+        );
+        let (reason, headers) = if raw_len > 0 {
+            let mut raw = vec![0u16; (raw_len as usize).div_ceil(2) + 1];
+            let mut bytes = (raw.len() * 2) as u32;
+            match WinHttpQueryHeaders(
+                request.0,
+                WINHTTP_QUERY_RAW_HEADERS_CRLF,
+                PCWSTR::null(),
+                Some(raw.as_mut_ptr().cast()),
+                &mut bytes,
+                std::ptr::null_mut(),
+            ) {
+                Ok(()) => {
+                    let n = (bytes as usize / 2).min(raw.len());
+                    parse_raw_headers(&String::from_utf16_lossy(&raw[..n]))
+                }
+                Err(_) => (String::new(), Vec::new()),
+            }
+        } else {
+            (String::new(), Vec::new())
+        };
         let mut body = Vec::new();
+        let mut truncated = false;
         loop {
             let mut avail = 0u32;
             WinHttpQueryDataAvailable(request.0, &mut avail).ctx("WinHttpQueryDataAvailable")?;
@@ -174,6 +229,7 @@ pub fn send(req: &Request<'_>) -> Result<Response> {
             let start = body.len();
             let want = (avail as usize).min(req.max_bytes.saturating_sub(start));
             if want == 0 {
+                truncated = true;
                 break;
             }
             body.resize(start + want, 0);
@@ -190,13 +246,34 @@ pub fn send(req: &Request<'_>) -> Result<Response> {
                 break;
             }
         }
-        Ok(Response { status, body })
+        Ok(Response {
+            status,
+            reason,
+            headers,
+            body,
+            truncated,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raw_headers_are_split() {
+        let (reason, h) = parse_raw_headers(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nX-A:  b \r\n\r\n",
+        );
+        assert_eq!(reason, "Not Found");
+        assert_eq!(
+            h,
+            vec![
+                ("Content-Type".into(), "text/plain".into()),
+                ("X-A".into(), "b".into())
+            ]
+        );
+    }
 
     #[test]
     fn invalid_url_is_an_error() {
@@ -241,7 +318,14 @@ mod tests {
         })
         .unwrap();
         assert_eq!(get.status, 201);
+        assert_eq!(get.reason, "Created");
+        assert!(
+            get.headers
+                .iter()
+                .any(|(k, v)| k == "Content-Length" && v == "5")
+        );
         assert_eq!(get.body, b"hola!");
+        assert!(!get.truncated);
         let post = send(&Request {
             method: "post",
             url: &url,
@@ -252,6 +336,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(post.body, b"hol");
+        assert!(post.truncated);
         let seen = server.join().unwrap();
         assert!(seen[0].starts_with("GET /a?b=1 HTTP/1.1"));
         assert!(seen[0].contains("X-Test: 1"));

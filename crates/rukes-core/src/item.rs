@@ -98,8 +98,11 @@ pub struct ResultItem {
     /// Archivo o carpeta que muestra el panel de previsualización (RF-017).
     pub preview: Option<PathBuf>,
     /// Texto completo para el panel de previsualización cuando no hay archivo (portapapeles,
-    /// snippets, notas).
+    /// snippets, notas). Si empieza por `# ` se muestra como Markdown.
     pub detail: Option<String>,
+    /// Abrir el panel de detalles al mostrarse en primer lugar de una lista de
+    /// [`crate::ActionOutcome::ShowResults`] (p. ej. la respuesta de una petición HTTP).
+    pub expand: bool,
 }
 
 impl ResultItem {
@@ -118,6 +121,7 @@ impl ResultItem {
             payload: String::new(),
             preview: None,
             detail: None,
+            expand: false,
         }
     }
 

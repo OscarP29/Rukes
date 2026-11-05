@@ -62,6 +62,8 @@ Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/relea
 | `wall`, `wall random` | Fondos de pantalla con miniaturas y previsualización; cambio automático opcional |
 | `plugins` | Plugins externos instalados, su estado y permisos |
 | `ajustes` | Panel visual de ajustes: tema, posición, ventana y plugins |
+| `help`, `help vol`, `info calc` | Ayuda de uso de cualquier comando, con ejemplos que se prueban con Enter |
+| `http 3000/api`, `post :8080/login {"u":"ana"}` | Mini Postman: peticiones HTTP (un número es un puerto de localhost) |
 
 | Tecla | Acción |
 | --- | --- |

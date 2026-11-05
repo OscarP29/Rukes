@@ -393,6 +393,8 @@ unmuted = "Sonido activado"
 volume = "Volumen"
 
 [hints]
+help = "Ayuda de cualquier comando"
+http = "Petición HTTP (un número es localhost)"
 calc = "Calcular y convertir unidades o divisas"
 clip = "Historial del portapapeles"
 controls = "Volumen, brillo, Wi-Fi, tema…"
@@ -470,3 +472,194 @@ theme_system = "Según el sistema"
 title = "Ajustes"
 unavailable = "No se pudieron cargar los ajustes"
 width = "Ancho"
+
+[help]
+examples = "Ejemplos"
+name = "Ayuda"
+tip = "Consejo"
+tips = "Consejos"
+try = "Enter lo prueba"
+
+[http]
+binary = "(contenido binario, {size})"
+body = "Cuerpo"
+body_n = "cuerpo de {size}"
+copied = "Copiado al portapapeles"
+copy = "Enter copia"
+copy_curl = "Copiar como curl"
+empty_body = "(sin cuerpo)"
+failed = "No se pudo completar la petición"
+headers_n = "{n} cabeceras"
+history_sub = "{status} · {ms} ms · hace {min} min · Enter la repite"
+name = "Peticiones HTTP"
+open_browser = "Abrir en el navegador"
+resend = "Enter la repite"
+retry = "Enter lo vuelve a intentar."
+send = "Enter envía"
+
+[usage.help]
+summary = "Lista los comandos y muestra cómo se usa cada uno"
+ex1 = "help | Todos los comandos con su resumen"
+ex2 = "help vol | Ayuda de un comando por su palabra clave"
+ex3 = "info calc | info y ayuda funcionan igual"
+tip1 = "Enter en un ejemplo lo escribe en el launcher para probarlo"
+tip2 = "Los plugins externos añaden su ayuda con una sección [help] en plugin.toml"
+
+[usage.apps]
+summary = "Abre aplicaciones del menú Inicio, de la Tienda y del PATH"
+ex1 = "chr | Busca por partes del nombre (Google Chrome)"
+ex2 = "code | Abre Visual Studio Code"
+tip1 = "Ctrl+Enter abre como administrador; Ctrl+Shift+Enter, la carpeta"
+tip2 = "Perfiles con argumentos y alias en [[plugins.apps.profiles]]"
+tip3 = "Se reindexan solas al instalar o quitar programas"
+
+[usage.files]
+summary = "Busca archivos y carpetas de tus carpetas (o de todo el disco con Everything)"
+ex1 = "informe | Archivos y apps a la vez"
+ex2 = "f: contrato | Solo archivos"
+ex3 = "d: proyectos | Solo carpetas"
+ex4 = "factura .pdf | Por extensión"
+tip1 = "Ctrl+O abre con…, Ctrl+T abre una terminal en la carpeta, Ctrl+P la vista previa"
+tip2 = "Carpetas indexadas en [plugins.files] roots"
+
+[usage.calc]
+summary = "Calculadora y conversión de unidades, fechas y horas"
+ex1 = "= 2^10 * 3 | Operaciones"
+ex2 = "5 km a millas | Unidades (sin = si parece una operación)"
+ex3 = "70 F en C | Temperatura"
+ex4 = "días hasta 25 dic | Fechas"
+ex5 = "hora en Tokio | Zonas horarias"
+tip1 = "Enter copia el resultado"
+
+[usage.currency]
+summary = "Convierte divisas con tasas guardadas en caché"
+ex1 = "100 usd a eur | Dólares a euros"
+ex2 = "50 eur en cop | Euros a pesos colombianos"
+tip1 = "La descarga de tasas se activa con currency_online en [plugins.calc] o en Ajustes"
+
+[usage.color]
+summary = "Convierte colores entre HEX, RGB, HSL y HSV con una muestra"
+ex1 = "#ff5733 | Desde HEX"
+ex2 = "rgb(255 87 51) | Desde RGB"
+ex3 = "hsl(11 100% 60%) | Desde HSL"
+tip1 = "Enter copia el formato elegido"
+
+[usage.controls]
+summary = "Volumen, brillo, Wi-Fi, Bluetooth, modo avión y tema de Windows"
+ex1 = "vol | Volumen actual"
+ex2 = "vol 50 | Fija el volumen"
+ex3 = "vol +10 | Sube o baja"
+ex4 = "vol mute | Silencia"
+ex5 = "brillo 70 | Brillo de la pantalla del portátil"
+ex6 = "wifi off | Apaga el Wi-Fi (también bluetooth, avion)"
+ex7 = "oscuro | Tema oscuro de Windows (claro para el claro)"
+tip1 = "Nada cambia hasta que pulsas Enter"
+
+[usage.web]
+summary = "Abre direcciones o busca en la web"
+ex1 = "github.com | Abre la dirección"
+ex2 = "g rust lifetimes | Busca en Google"
+ex3 = "yt lofi | Busca en YouTube"
+tip1 = "Buscadores propios en [plugins.web.engines]"
+
+[usage.shell]
+summary = "Ejecuta comandos en la terminal o abre URIs del shell"
+ex1 = "> dir | Comando en la terminal"
+ex2 = "> shell:startup | Carpeta de inicio de Windows"
+tip1 = "Terminal configurable en [general] terminal"
+
+[usage.syscmd]
+summary = "Bloquear, suspender, apagar, reiniciar, cerrar sesión, vaciar la papelera"
+ex1 = "bloquear | Bloquea el equipo"
+ex2 = "apagar | Apaga (pide confirmación)"
+ex3 = "vaciar papelera | Vacía la papelera"
+
+[usage.windows]
+summary = "Cambia a una ventana abierta"
+ex1 = "win code | Ventanas cuyo título contiene «code»"
+ex2 = "win | Todas las ventanas"
+
+[usage.processes]
+summary = "Lista procesos con su memoria y CPU y los termina"
+ex1 = "ps | Procesos que más consumen"
+ex2 = "kill chrome | Terminar un proceso (pide confirmación)"
+
+[usage.generators]
+summary = "Genera UUID y contraseñas, calcula hashes y codifica texto"
+ex1 = "uuid | UUID v4"
+ex2 = "pass 24 | Contraseña de 24 caracteres"
+ex3 = "sha256 texto | Hash del texto"
+ex4 = "b64 texto | Base64 (también url y hex)"
+tip1 = "Enter copia"
+
+[usage.clipboard]
+summary = "Historial del portapapeles, cifrado en tu equipo"
+ex1 = "clip | Últimas copias"
+ex2 = "clip factura | Busca en el historial"
+tip1 = "Enter pega en la ventana anterior; Ctrl+S fija; Ctrl+D borra"
+
+[usage.snippets]
+summary = "Textos reutilizables con variables y campos"
+ex1 = "snip | Todos los snippets"
+ex2 = "firma | Un snippet por su nombre o alias"
+tip1 = "Variables {fecha}, {hora}, {cursor} y campos {campo:Nombre}"
+tip2 = "Ctrl+E edita el snippet"
+
+[usage.notes]
+summary = "Notas rápidas en Markdown"
+ex1 = "note idea para el blog | Añade una nota"
+ex2 = "note | Notas recientes"
+
+[usage.todo]
+summary = "Lista de tareas en Markdown"
+ex1 = "todo comprar pan | Añade una tarea"
+ex2 = "todo | Tareas pendientes (Enter la completa)"
+
+[usage.remind]
+summary = "Recordatorios con notificación"
+ex1 = "remind 15m llamar a Ana | Dentro de 15 minutos"
+ex2 = "recordar 14:30 reunión | A una hora"
+ex3 = "remind | Recordatorios pendientes (Ctrl+D cancela)"
+
+[usage.workflows]
+summary = "Abre y coloca apps y webs en tus monitores, y triggers programados"
+ex1 = "workflows | Tus workflows"
+ex2 = "modo trabajo | Ejecuta un workflow por su nombre"
+ex3 = "triggers | Disparadores programados"
+tip1 = "Se definen en archivos .toml de la carpeta workflows"
+
+[usage.wall]
+summary = "Fondos de pantalla con miniaturas y vista previa"
+ex1 = "wall | Fondos de tus carpetas"
+ex2 = "wall random | Uno al azar"
+tip1 = "Carpetas y cambio automático en [plugins.wall]"
+
+[usage.plugins]
+summary = "Plugins externos instalados, su estado y permisos"
+ex1 = "plugins | Lista de plugins (Enter reinicia uno)"
+tip1 = "Instálalos copiando su carpeta a la carpeta plugins de la configuración"
+
+[usage.scripts]
+summary = "Tus scripts (PowerShell, Python, Rhai…) con argumentos en línea"
+ex1 = "new script Backup | Crea un script desde una plantilla"
+ex2 = "logs | Historial de ejecuciones"
+tip1 = "Ctrl+E edita el script; Ctrl+D lo manda a la papelera"
+
+[usage.rukes]
+summary = "Comandos de Rukes: ajustes, configuración, recargar, salir, exportar e importar"
+ex1 = "ajustes | Panel visual de ajustes"
+ex2 = "configuración | Abre config.toml"
+ex3 = "exportar configuración | Copia de seguridad en Documentos"
+ex4 = "salir | Cierra Rukes"
+
+[usage.http]
+summary = "Mini Postman: envía peticiones HTTP y muestra la respuesta"
+ex1 = "http 3000 | GET a http://localhost:3000 (un número es un puerto local)"
+ex2 = "get :8080/api/users | El método también sirve de palabra clave"
+ex3 = "post 3000/login {\"user\":\"ana\"} | Cuerpo JSON (Content-Type automático)"
+ex4 = "http api.github.com/users/octocat | Sin esquema usa https"
+ex5 = "put 3000/u/1 -H \"Authorization: Bearer x\" {\"a\":1} | Cabeceras con -H"
+ex6 = "http | Historial de esta sesión"
+tip1 = "Nada se envía hasta pulsar Enter"
+tip2 = "En la respuesta: Enter repite, y el cuerpo, las cabeceras o el curl se copian con Enter"
+tip3 = "Ctrl+P o el botón de detalles muestran el cuerpo formateado"

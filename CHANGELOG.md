@@ -4,6 +4,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Ayuda de comandos y peticiones HTTP
+
+#### Añadido
+- `help` / `info` / `ayuda` `<comando>`: resumen de todos los comandos o la ayuda de uno (por
+  palabra clave, prefijo o nombre) con ejemplos que se prueban con Enter y consejos; la ayuda
+  completa en Markdown en el panel de detalles.
+- Ayuda para plugins: método `Plugin::help` (por defecto lee `[usage.<id>]` de los textos) y
+  sección `[help]` en `plugin.toml` para los externos. Todos los integrados tienen la suya.
+- Plugin `http` (mini Postman): `http 3000/api` (un número es un puerto de localhost),
+  métodos como palabra clave (`post`, `put`, `delete`…), cabeceras con `-H`, cuerpo JSON con
+  `Content-Type` automático, respuesta con estado, tiempo, tamaño, cabeceras y cuerpo
+  formateado; repetir, copiar el cuerpo, las cabeceras o como `curl`, y abrir en el navegador.
+  Historial de la sesión solo en memoria. `[plugins.http]`.
+- El cliente HTTP de la plataforma devuelve las cabeceras y el texto del estado.
+- `ResultItem::expand` abre el panel de detalles con la respuesta; un detalle que empieza por
+  `# ` se muestra como Markdown.
+
 ### Interfaz: ajustes visuales y ayudas
 
 #### Añadido

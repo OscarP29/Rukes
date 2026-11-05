@@ -432,6 +432,10 @@ impl State {
     fn show_results(&mut self, items: Vec<ResultItem>) -> Task<Message> {
         // Cancela la consulta en curso para que sus lotes no pisen esta lista.
         self.qid = self.host.query("", Arc::new(|_| {}));
+        // Un primer resultado con `expand` (la respuesta HTTP) abre el panel de detalles.
+        if items.first().is_some_and(|i| i.expand) {
+            self.preview_on = true;
+        }
         self.results = items;
         self.selected = 0;
         self.offset = 0;
@@ -853,6 +857,8 @@ fn glyph<'a>(l: &Look, name: &str) -> Element<'a, Message> {
         "trigger" => "at",
         "plugin" => "{}",
         "wall" => "[#]",
+        "help" => "?",
+        "http" => "</>",
         _ => "·",
     };
     let (bg, radius) = (l.selection, (l.radius - 2.0).max(0.0));
@@ -1184,13 +1190,18 @@ fn preview_panel<'a>(s: &'a State, l: &Look) -> Element<'a, Message> {
                 }
                 if let Some(d) = &item.detail {
                     col = col.push(divider(l.divider, false));
-                    col = col.push(
-                        txt(d.as_str())
-                            .font(l.mono)
-                            .size(l.small() - 0.5)
-                            .color(l.fg)
-                            .width(Length::Fill),
-                    );
+                    // Un detalle que empieza por «# » es Markdown (la ayuda de los comandos).
+                    if d.starts_with("# ") {
+                        col = col.push(markdown(l, d));
+                    } else {
+                        col = col.push(
+                            txt(d.as_str())
+                                .font(l.mono)
+                                .size(l.small() - 0.5)
+                                .color(l.fg)
+                                .width(Length::Fill),
+                        );
+                    }
                 } else {
                     col = col.push(txt(tr("preview.hint")).size(l.small() - 1.0).color(l.muted));
                 }

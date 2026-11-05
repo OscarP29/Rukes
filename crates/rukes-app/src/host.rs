@@ -79,6 +79,8 @@ pub struct AppHost {
     ui: UiSender,
     paths: rukes_config::paths::Paths,
     hwnd: AtomicIsize,
+    /// Plugin HTTP (vive entre recargas para conservar el historial).
+    http: Arc<rukes_plugins::HttpPlugin>,
     /// Ventana que tenía el foco antes de mostrar el launcher.
     previous: AtomicIsize,
     /// Contador de ocultaciones, para cancelar recortes de memoria obsoletos.
@@ -153,6 +155,7 @@ impl AppHost {
             icon_cache,
             paths,
             hwnd: AtomicIsize::new(0),
+            http: Arc::new(rukes_plugins::HttpPlugin::new()),
             previous: AtomicIsize::new(0),
             hide_seq: std::sync::atomic::AtomicU64::new(0),
             shown_at: Mutex::new(None),
@@ -338,6 +341,10 @@ impl AppHost {
         if config.plugins.controls.enabled {
             plugins.push(Arc::new(ControlsPlugin));
         }
+        if config.plugins.http.enabled {
+            // El mismo plugin entre recargas: conserva el historial de la sesión.
+            plugins.push(Arc::clone(&self.http) as Arc<dyn Plugin>);
+        }
         if config.plugins.processes.enabled {
             plugins.push(Arc::new(ProcessesPlugin::new(
                 config.plugins.processes.priority,
@@ -387,6 +394,9 @@ impl AppHost {
             }),
             on_reload: Box::new(move || reload_engine.refresh_all()),
         }));
+        // La ayuda se construye con todos los demás ya instalados (help <comando>).
+        let help = rukes_plugins::HelpPlugin::new(&plugins);
+        plugins.push(Arc::new(help));
         self.engine.set_plugins(plugins);
         self.refresh_hotkeys();
     }

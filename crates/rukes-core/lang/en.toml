@@ -393,6 +393,8 @@ unmuted = "Sound on"
 volume = "Volume"
 
 [hints]
+help = "Help for any command"
+http = "HTTP request (a number is localhost)"
 calc = "Calculate and convert units or currencies"
 clip = "Clipboard history"
 controls = "Volume, brightness, Wi-Fi, theme…"
@@ -470,3 +472,194 @@ theme_system = "Follow the system"
 title = "Settings"
 unavailable = "Could not load the settings"
 width = "Width"
+
+[help]
+examples = "Examples"
+name = "Help"
+tip = "Tip"
+tips = "Tips"
+try = "Enter tries it"
+
+[http]
+binary = "(binary content, {size})"
+body = "Body"
+body_n = "{size} body"
+copied = "Copied to the clipboard"
+copy = "Enter copies"
+copy_curl = "Copy as curl"
+empty_body = "(no body)"
+failed = "The request could not be completed"
+headers_n = "{n} headers"
+history_sub = "{status} · {ms} ms · {min} min ago · Enter repeats it"
+name = "HTTP requests"
+open_browser = "Open in the browser"
+resend = "Enter repeats it"
+retry = "Enter tries again."
+send = "Enter sends"
+
+[usage.help]
+summary = "Lists the commands and shows how to use each one"
+ex1 = "help | Every command with its summary"
+ex2 = "help vol | Help for a command by its keyword"
+ex3 = "info calc | info and help work the same"
+tip1 = "Enter on an example types it in the launcher so you can try it"
+tip2 = "External plugins add their help with a [help] section in plugin.toml"
+
+[usage.apps]
+summary = "Opens Start menu, Store and PATH applications"
+ex1 = "chr | Search by parts of the name (Google Chrome)"
+ex2 = "code | Opens Visual Studio Code"
+tip1 = "Ctrl+Enter opens as administrator; Ctrl+Shift+Enter, the folder"
+tip2 = "Profiles with arguments and aliases in [[plugins.apps.profiles]]"
+tip3 = "Reindexed automatically when programs are installed or removed"
+
+[usage.files]
+summary = "Searches files and folders in your folders (or the whole disk with Everything)"
+ex1 = "report | Files and apps at once"
+ex2 = "f: contract | Files only"
+ex3 = "d: projects | Folders only"
+ex4 = "invoice .pdf | By extension"
+tip1 = "Ctrl+O opens with…, Ctrl+T opens a terminal in the folder, Ctrl+P the preview"
+tip2 = "Indexed folders in [plugins.files] roots"
+
+[usage.calc]
+summary = "Calculator and unit, date and time conversion"
+ex1 = "= 2^10 * 3 | Arithmetic"
+ex2 = "5 km to miles | Units (no = needed when it looks like math)"
+ex3 = "70 F in C | Temperature"
+ex4 = "days until dec 25 | Dates"
+ex5 = "time in Tokyo | Time zones"
+tip1 = "Enter copies the result"
+
+[usage.currency]
+summary = "Converts currencies with cached rates"
+ex1 = "100 usd to eur | Dollars to euros"
+ex2 = "50 eur in cop | Euros to Colombian pesos"
+tip1 = "Rate downloads are turned on with currency_online in [plugins.calc] or in Settings"
+
+[usage.color]
+summary = "Converts colors between HEX, RGB, HSL and HSV with a swatch"
+ex1 = "#ff5733 | From HEX"
+ex2 = "rgb(255 87 51) | From RGB"
+ex3 = "hsl(11 100% 60%) | From HSL"
+tip1 = "Enter copies the chosen format"
+
+[usage.controls]
+summary = "Volume, brightness, Wi-Fi, Bluetooth, airplane mode and Windows theme"
+ex1 = "vol | Current volume"
+ex2 = "vol 50 | Sets the volume"
+ex3 = "vol +10 | Turns it up or down"
+ex4 = "vol mute | Mutes"
+ex5 = "brightness 70 | Laptop screen brightness"
+ex6 = "wifi off | Turns Wi-Fi off (also bluetooth, airplane)"
+ex7 = "dark | Windows dark theme (light for the light one)"
+tip1 = "Nothing changes until you press Enter"
+
+[usage.web]
+summary = "Opens addresses or searches the web"
+ex1 = "github.com | Opens the address"
+ex2 = "g rust lifetimes | Searches Google"
+ex3 = "yt lofi | Searches YouTube"
+tip1 = "Custom search engines in [plugins.web.engines]"
+
+[usage.shell]
+summary = "Runs commands in the terminal or opens shell URIs"
+ex1 = "> dir | Command in the terminal"
+ex2 = "> shell:startup | Windows startup folder"
+tip1 = "Terminal set in [general] terminal"
+
+[usage.syscmd]
+summary = "Lock, sleep, shut down, restart, sign out, empty the recycle bin"
+ex1 = "lock | Locks the computer"
+ex2 = "shutdown | Shuts down (asks for confirmation)"
+ex3 = "empty recycle bin | Empties the recycle bin"
+
+[usage.windows]
+summary = "Switches to an open window"
+ex1 = "win code | Windows whose title contains “code”"
+ex2 = "win | Every window"
+
+[usage.processes]
+summary = "Lists processes with their memory and CPU and ends them"
+ex1 = "ps | Top processes"
+ex2 = "kill chrome | End a process (asks for confirmation)"
+
+[usage.generators]
+summary = "Generates UUIDs and passwords, computes hashes and encodes text"
+ex1 = "uuid | UUID v4"
+ex2 = "pass 24 | 24-character password"
+ex3 = "sha256 text | Hash of the text"
+ex4 = "b64 text | Base64 (also url and hex)"
+tip1 = "Enter copies"
+
+[usage.clipboard]
+summary = "Clipboard history, encrypted on your computer"
+ex1 = "clip | Latest copies"
+ex2 = "clip invoice | Searches the history"
+tip1 = "Enter pastes into the previous window; Ctrl+S pins; Ctrl+D deletes"
+
+[usage.snippets]
+summary = "Reusable texts with variables and fields"
+ex1 = "snip | Every snippet"
+ex2 = "signature | A snippet by its name or alias"
+tip1 = "Variables {fecha}, {hora}, {cursor} and fields {campo:Name}"
+tip2 = "Ctrl+E edits the snippet"
+
+[usage.notes]
+summary = "Quick notes in Markdown"
+ex1 = "note blog idea | Adds a note"
+ex2 = "note | Recent notes"
+
+[usage.todo]
+summary = "Task list in Markdown"
+ex1 = "todo buy bread | Adds a task"
+ex2 = "todo | Pending tasks (Enter completes one)"
+
+[usage.remind]
+summary = "Reminders with a notification"
+ex1 = "remind 15m call Ana | In 15 minutes"
+ex2 = "remind 14:30 meeting | At a time"
+ex3 = "remind | Pending reminders (Ctrl+D cancels)"
+
+[usage.workflows]
+summary = "Opens and places apps and webs on your monitors, plus scheduled triggers"
+ex1 = "workflows | Your workflows"
+ex2 = "modo trabajo | Runs a workflow by its name or alias"
+ex3 = "triggers | Scheduled triggers"
+tip1 = "Defined in .toml files in the workflows folder"
+
+[usage.wall]
+summary = "Wallpapers with thumbnails and preview"
+ex1 = "wall | Wallpapers from your folders"
+ex2 = "wall random | A random one"
+tip1 = "Folders and automatic change in [plugins.wall]"
+
+[usage.plugins]
+summary = "Installed external plugins, their status and permissions"
+ex1 = "plugins | Plugin list (Enter restarts one)"
+tip1 = "Install them by copying their folder into the plugins folder of the configuration"
+
+[usage.scripts]
+summary = "Your scripts (PowerShell, Python, Rhai…) with inline arguments"
+ex1 = "new script Backup | Creates a script from a template"
+ex2 = "logs | Run history"
+tip1 = "Ctrl+E edits the script; Ctrl+D sends it to the recycle bin"
+
+[usage.rukes]
+summary = "Rukes commands: settings, configuration, reload, quit, export and import"
+ex1 = "settings | Visual settings panel"
+ex2 = "config | Opens config.toml"
+ex3 = "export config | Backup in Documents"
+ex4 = "quit | Closes Rukes"
+
+[usage.http]
+summary = "Mini Postman: sends HTTP requests and shows the response"
+ex1 = "http 3000 | GET http://localhost:3000 (a number is a local port)"
+ex2 = "get :8080/api/users | The method works as a keyword too"
+ex3 = "post 3000/login {\"user\":\"ana\"} | JSON body (automatic Content-Type)"
+ex4 = "http api.github.com/users/octocat | No scheme means https"
+ex5 = "put 3000/u/1 -H \"Authorization: Bearer x\" {\"a\":1} | Headers with -H"
+ex6 = "http | This session's history"
+tip1 = "Nothing is sent until you press Enter"
+tip2 = "In the response: Enter repeats, and the body, headers or curl are copied with Enter"
+tip3 = "Ctrl+P or the details button show the formatted body"

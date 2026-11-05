@@ -50,10 +50,26 @@ filesystem = "read"
 
 [config]                       # libre: el plugin lo recibe en `initialize`
 palabras_por_minuto = 200
+
+[help]                         # opcional: lo que muestra «help cuenta» / «info cuenta»
+summary = "Cuenta palabras, caracteres y tiempo de lectura"
+tips = ["Enter copia el resultado"]
+
+[[help.usage]]                 # un ejemplo por bloque; Enter en la ayuda lo escribe
+example = "cuenta hola mundo"
+description = "Palabras y caracteres del texto"
 ```
 
 Hace falta al menos `keywords`, `prefix` o `global = true`. Un campo desconocido en `[plugin]` es
 un error (para detectar erratas). El id del plugin es `ext:<nombre de la carpeta>`.
+
+### Ayuda (`help <comando>`)
+
+`help`, `info` o `ayuda` seguidos de una palabra clave, el prefijo o el nombre del plugin
+muestran su ayuda: el resumen, un resultado por ejemplo (Enter lo escribe en el launcher para
+probarlo) y los consejos. Sin sección `[help]` se usan la `description` y las palabras clave.
+Los plugins integrados la toman de los textos de la interfaz (`[usage.<id>]` en
+`crates/rukes-core/lang`) o implementan `Plugin::help`.
 
 ## Ciclo de vida
 

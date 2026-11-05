@@ -179,6 +179,21 @@ pub fn tr(key: &str) -> &'static str {
     intern(key)
 }
 
+/// Traduce una clave, o `None` si no existe en el idioma actual (ni en el de respaldo).
+pub fn lookup(key: &str) -> Option<&'static str> {
+    let t = TABLE.read().unwrap_or_else(PoisonError::into_inner);
+    if t.is_none() {
+        drop(t);
+        let _ = set_language("es", "");
+        return TABLE
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .and_then(|t| t.get(key).copied());
+    }
+    t.as_ref().and_then(|t| t.get(key).copied())
+}
+
 /// Traduce y sustituye `{nombre}` por cada valor.
 pub fn trf(key: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
     let mut s = tr(key).to_owned();

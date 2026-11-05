@@ -98,6 +98,28 @@ admin = false
 - `note idea`, `todo comprar pan`, `todo`: notas y tareas en Markdown.
 - `remind 15m llamar a Ana`, `recordar 14:30 reunión`: recordatorios.
 
+### Ayuda
+
+- `help` (o `info`, `ayuda`) lista todos los comandos con un resumen.
+- `help vol`, `info calc`, `help http`: la ayuda de un comando, con ejemplos. Enter en un
+  ejemplo lo escribe en el launcher para probarlo; `Ctrl+P` muestra la ayuda completa.
+
+### Peticiones HTTP (mini Postman)
+
+| Escribe | Envía |
+| --- | --- |
+| `http 3000` | `GET http://localhost:3000` (un número es un puerto local) |
+| `get :8080/api/users` | `GET http://localhost:8080/api/users` |
+| `post 3000/login {"user":"ana"}` | `POST` con cuerpo JSON (`Content-Type` automático) |
+| `put 3000/u/1 -H "Authorization: Bearer x" {"a":1}` | Con cabeceras (`-H`, repetible) |
+| `http api.github.com/users/octocat` | Sin esquema: `https` (y `http` para localhost e IP) |
+| `http` | Historial de la sesión (Enter repite) |
+
+Nada se envía hasta pulsar Enter. La respuesta muestra estado, tiempo y tamaño, y el cuerpo
+(JSON formateado) en el panel de detalles. Enter sobre el estado repite la petición; sobre el
+cuerpo, las cabeceras o «Copiar como curl», los copia. El historial solo vive en memoria
+(puede contener tokens) y se borra al cerrar Rukes. `[plugins.http] enabled = false` lo quita.
+
 ### Automatización
 
 - **Scripts:** archivos en la carpeta `scripts` junto a `config.toml` (PowerShell, Python,

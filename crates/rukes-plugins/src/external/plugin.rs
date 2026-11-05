@@ -179,6 +179,27 @@ impl Plugin for ExternalPlugin {
         }
     }
 
+    /// `[help]` del manifiesto o, si no hay, su descripción y palabras clave.
+    fn help(&self) -> Option<rukes_core::PluginHelp> {
+        let m = &self.manifest;
+        if let Some(h) = &m.help {
+            return Some(h.clone());
+        }
+        Some(rukes_core::PluginHelp {
+            summary: m.description.clone().unwrap_or_else(|| m.name.clone()),
+            usage: m
+                .keywords
+                .iter()
+                .chain(m.prefix.iter())
+                .map(|k| rukes_core::HelpUsage {
+                    example: k.clone(),
+                    description: String::new(),
+                })
+                .collect(),
+            tips: Vec::new(),
+        })
+    }
+
     fn query(&self, q: &Query, cancel: &CancelToken, sink: &mut dyn FnMut(Vec<ResultItem>)) {
         if !q.targeted && q.text.trim().is_empty() {
             return;

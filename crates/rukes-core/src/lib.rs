@@ -6,6 +6,7 @@
 mod engine;
 pub mod frecency;
 pub mod fuzzy;
+mod help;
 pub mod i18n;
 mod item;
 pub mod persist;
@@ -16,6 +17,7 @@ pub mod ranking;
 pub use engine::{Engine, EngineConfig, QueryBatch};
 pub use frecency::Frecency;
 pub use fuzzy::Fuzzy;
+pub use help::{HelpUsage, PluginHelp};
 pub use item::{Action, ActionId, Icon, ResultItem};
 pub use plugin::{ActionOutcome, Plugin, PluginError, PluginMetadata};
 pub use query::{CancelToken, Query, QueryId};

@@ -163,3 +163,8 @@ El panel visual (listas, interruptores, deslizadores, `toml_edit`) subió el bin
 Con Rhai compilado con `opt-level = "s"` (`[profile.release.package.rhai]`; los scripts no
 están en el camino de la búsqueda) queda en **14,55 MB** (15 256 576 bytes), 0,45 MB
 por debajo del límite.
+
+### Ayuda de comandos y plugin HTTP
+
+**14,74 MB** (15 454 208 bytes): +0,19 MB por los textos de ayuda y el plugin `http`.
+Quedan 0,26 MB hasta el límite de 15 MB.

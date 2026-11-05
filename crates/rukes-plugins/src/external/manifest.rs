@@ -16,6 +16,27 @@ struct File {
     permissions: BTreeMap<String, toml::Value>,
     #[serde(default)]
     config: toml::Table,
+    #[serde(default)]
+    help: Option<HelpSection>,
+}
+
+/// `[help]`: la ayuda que muestra `help <comando>`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HelpSection {
+    summary: String,
+    #[serde(default)]
+    usage: Vec<HelpExample>,
+    #[serde(default)]
+    tips: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HelpExample {
+    example: String,
+    #[serde(default)]
+    description: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +100,8 @@ pub struct Manifest {
     pub permissions: Vec<(String, String)>,
     /// Tabla `[config]`, que recibe en `initialize`.
     pub config: serde_json::Value,
+    /// Ayuda `[help]`; sin ella se usa la descripción.
+    pub help: Option<rukes_core::PluginHelp>,
 }
 
 fn show(v: &toml::Value) -> String {
@@ -125,6 +148,19 @@ impl Manifest {
             })
             .collect();
         let config = serde_json::to_value(&f.config).unwrap_or(serde_json::Value::Null);
+        let help = f.help.map(|h| rukes_core::PluginHelp {
+            summary: h.summary.trim().to_owned(),
+            usage: h
+                .usage
+                .into_iter()
+                .filter(|u| !u.example.trim().is_empty())
+                .map(|u| rukes_core::HelpUsage {
+                    example: u.example.trim().to_owned(),
+                    description: u.description.trim().to_owned(),
+                })
+                .collect(),
+            tips: h.tips,
+        });
         Ok(Self {
             dir: dir.to_owned(),
             id: format!("ext:{folder}"),
@@ -147,6 +183,7 @@ impl Manifest {
             enabled: p.enabled.unwrap_or(true),
             permissions,
             config,
+            help,
         })
     }
 
@@ -210,9 +247,25 @@ filesystem = "read"
 
 [config]
 saludo = "hola"
+
+[help]
+summary = "Cuenta palabras"
+tips = ["Un truco"]
+
+[[help.usage]]
+example = "cuenta hola"
+description = "Dos palabras"
+
+[[help.usage]]
+example = "  "
 "#,
         )
         .unwrap();
+        let h = m.help.clone().unwrap();
+        assert_eq!(h.summary, "Cuenta palabras");
+        assert_eq!(h.usage.len(), 1, "los ejemplos vacíos se ignoran");
+        assert_eq!(h.usage[0].example, "cuenta hola");
+        assert_eq!(h.tips, vec!["Un truco".to_owned()]);
         assert_eq!(m.id, "ext:cuenta");
         assert_eq!(m.keywords, ["cuenta", "count"]);
         assert_eq!(m.permissions_label(), "clipboard · filesystem: read");

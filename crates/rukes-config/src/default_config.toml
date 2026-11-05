@@ -195,6 +195,11 @@ todo_file = ""
 # "vol 50", "vol mute", "brillo 70", "wifi", "bluetooth", "avion", "oscuro", "claro".
 enabled = true
 
+[plugins.http]
+# Mini Postman: "http 3000/api" (un número es un puerto de localhost), "post :8080/login {...}",
+# "-H \"Nombre: valor\"" para cabeceras. Solo envía al pulsar Enter.
+enabled = true
+
 [plugins.wall]
 # "wall": tus fondos de pantalla con previsualización; Enter lo pone, "wall random" elige uno.
 enabled = true

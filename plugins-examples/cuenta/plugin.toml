@@ -20,3 +20,16 @@ filesystem = false
 # Llega al plugin en `initialize` (params.config).
 [config]
 palabras_por_minuto = 200
+
+# Lo que muestra «help cuenta» / «info cuenta».
+[help]
+summary = "Cuenta palabras, caracteres, líneas y tiempo de lectura del texto"
+tips = ["Enter copia el resultado", "«cuenta cuelga» y «cuenta muere» prueban el aislamiento"]
+
+[[help.usage]]
+example = "cuenta hola mundo"
+description = "Palabras y caracteres"
+
+[[help.usage]]
+example = "count The quick brown fox"
+description = "También en inglés"

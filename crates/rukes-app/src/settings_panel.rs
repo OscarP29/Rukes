@@ -263,6 +263,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 "",
                 p.controls.enabled,
             ),
+            toggle("plugins.http.enabled", "http.name", "", p.http.enabled),
             toggle(
                 "plugins.generators.enabled",
                 "generators.name",
