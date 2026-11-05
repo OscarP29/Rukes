@@ -7,6 +7,7 @@ mod logging;
 mod look;
 mod preview;
 mod settings;
+mod settings_panel;
 mod system_plugin;
 
 use std::sync::Arc;

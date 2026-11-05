@@ -255,6 +255,7 @@ pub const BUILTIN: &[(&str, &str)] = &[
     ("gruvbox", include_str!("../../../themes/gruvbox.toml")),
     ("nord", include_str!("../../../themes/nord.toml")),
     ("dracula", include_str!("../../../themes/dracula.toml")),
+    ("midnight", include_str!("../../../themes/midnight.toml")),
     (
         "rukes-light",
         include_str!("../../../themes/rukes-light.toml"),
@@ -263,6 +264,29 @@ pub const BUILTIN: &[(&str, &str)] = &[
 
 /// Nombre especial: sigue el modo claro/oscuro del sistema (RF-198).
 pub const SYSTEM: &str = "system";
+
+/// Temas que se pueden elegir: `(nombre de archivo, nombre visible, oscuro)`. Primero los
+/// incluidos y después los de `user_dir`; los que no cargan no aparecen.
+pub fn available(user_dir: &Path) -> Vec<(String, String, bool)> {
+    let mut ids: Vec<String> = BUILTIN.iter().map(|(k, _)| (*k).to_owned()).collect();
+    if let Ok(entries) = std::fs::read_dir(user_dir) {
+        let mut user: Vec<String> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|x| x.eq_ignore_ascii_case("toml"))
+            })
+            .filter_map(|p| p.file_stem().map(|s| normalize(&s.to_string_lossy())))
+            .filter(|id| !ids.contains(id))
+            .collect();
+        user.sort();
+        ids.extend(user);
+    }
+    ids.into_iter()
+        .filter_map(|id| load(&id, user_dir).ok().map(|t| (id, t.name, t.dark)))
+        .collect()
+}
 
 /// Normaliza un nombre de tema: `Tokyo Night` → `tokyo-night`.
 pub fn normalize(name: &str) -> String {
@@ -441,6 +465,27 @@ mod tests {
         assert_eq!(Rgba::parse("1a1b26"), None);
         assert_eq!(Rgba::parse("#zzzzzz"), None);
         assert_eq!(Rgba::from_rgb(0x123456), Rgba([0x12, 0x34, 0x56, 255]));
+    }
+
+    #[test]
+    fn available_lists_builtin_and_user_themes() {
+        let dir = std::env::temp_dir().join(format!("rukes-avail-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("mi-tema.toml"),
+            "[theme]\nname = \"Mi tema\"\nextends = \"midnight\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("roto.toml"), "esto no es toml [").unwrap();
+        let list = available(&dir);
+        assert_eq!(list.len(), BUILTIN.len() + 1);
+        assert!(list.contains(&("midnight".into(), "Midnight".into(), true)));
+        assert_eq!(
+            list.last().unwrap(),
+            &("mi-tema".into(), "Mi tema".into(), true)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

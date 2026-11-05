@@ -61,6 +61,7 @@ Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/relea
 | `modo trabajo`, `workflows`, `triggers` | Workflows (apps y webs colocadas en tus monitores) y triggers programados |
 | `wall`, `wall random` | Fondos de pantalla con miniaturas y previsualización; cambio automático opcional |
 | `plugins` | Plugins externos instalados, su estado y permisos |
+| `ajustes` | Panel visual de ajustes: tema, posición, ventana y plugins |
 
 | Tecla | Acción |
 | --- | --- |
@@ -77,9 +78,12 @@ Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/relea
 | `↑` `↓` / `Tab` / `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
 | `Esc` | Ocultar |
 
+- **Ajustes:** escribe «ajustes» (o usa el engranaje de la leyenda o la bandeja) para cambiar
+  tema, posición, atajo y plugins sin tocar archivos.
 - **Configuración:** `%APPDATA%\Rukes\config.toml`, que se crea comentado en el primer arranque y
   se aplica al guardar. También puedes abrirla escribiendo «configuración» en el launcher.
-- **Temas:** `theme` en `[general]` (`system`, `tokyo-night`, `catppuccin-mocha`, `nord`…).
+- **Temas:** `theme` en `[general]` (`system`, `tokyo-night`, `catppuccin-mocha`, `nord`,
+  `midnight` (negro puro)…).
   Copia un archivo de `themes/` a la carpeta `themes` junto a `config.toml` para crear el tuyo;
   se aplica al guardar.
 - **Idioma:** `language = "auto"`, `"es"` o `"en"`. Los textos están en

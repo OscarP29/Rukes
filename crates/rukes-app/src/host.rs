@@ -40,6 +40,7 @@ const TRAY_RELOAD: u16 = 3;
 const TRAY_PAUSE: u16 = 4;
 const TRAY_QUIT: u16 = 5;
 const TRAY_TRIGGERS: u16 = 6;
+const TRAY_CONFIG_FILE: u16 = 7;
 
 /// Nombre del valor en la clave `Run`.
 const AUTOSTART_NAME: &str = "Rukes";
@@ -1171,6 +1172,7 @@ impl AppHost {
                 let mut menu = vec![
                     MenuEntry::Item(TRAY_SHOW, format!("{} ({hotkey})", tr("tray.show"))),
                     MenuEntry::Item(TRAY_SETTINGS, tr("tray.settings").to_owned()),
+                    MenuEntry::Item(TRAY_CONFIG_FILE, tr("tray.config_file").to_owned()),
                     MenuEntry::Item(TRAY_RELOAD, tr("tray.reload").to_owned()),
                     MenuEntry::Item(
                         TRAY_PAUSE,
@@ -1222,10 +1224,10 @@ impl AppHost {
         match id {
             TRAY_SHOW => self.toggle(true),
             TRAY_SETTINGS => {
-                if let Err(e) = crate::system_plugin::open_config(&self.paths.config_file()) {
-                    self.notice(format!("{}: {e}", tr("error.action")));
-                }
+                self.toggle(true);
+                let _ = self.ui.unbounded_send(UiEvent::OpenSettings);
             }
+            TRAY_CONFIG_FILE => self.open_config_file(),
             TRAY_RELOAD => {
                 self.inner().last_refresh = Instant::now();
                 if let Some(f) = self.files.lock().ok().and_then(|f| f.clone()) {
@@ -1407,6 +1409,32 @@ impl Host for AppHost {
 
     fn preview(&self, path: &std::path::Path) -> Option<Preview> {
         crate::preview::build(path)
+    }
+
+    fn resize_keep_bottom(&self, width: f32, height: f32) {
+        let hwnd = self.hwnd.load(Ordering::SeqCst);
+        if hwnd != 0 {
+            window::resize_keep_bottom(hwnd, width, height);
+        }
+    }
+
+    fn settings_form(&self) -> Option<rukes_ui::SettingsForm> {
+        let config = self.inner().config.clone();
+        let themes = rukes_config::theme::available(&self.paths.themes_dir());
+        Some(crate::settings_panel::form(&config, &themes))
+    }
+
+    fn save_settings(&self, changes: &[(String, rukes_ui::SettingValue)]) -> Result<(), String> {
+        let edits = crate::settings_panel::edits(changes)?;
+        rukes_config::edit::save(&self.paths.config_file(), &edits)?;
+        tracing::info!(n = edits.len(), "ajustes guardados desde el panel");
+        Ok(())
+    }
+
+    fn open_config_file(&self) {
+        if let Err(e) = crate::system_plugin::open_config(&self.paths.config_file()) {
+            self.notice(format!("{}: {e}", tr("error.action")));
+        }
     }
 
     fn shown(&self) {

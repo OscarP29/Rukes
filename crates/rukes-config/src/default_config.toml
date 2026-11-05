@@ -14,13 +14,14 @@ start_with_windows = false
 terminal = "wt"
 # Tema: "system" (sigue el modo claro/oscuro de Windows), uno incluido o uno de la carpeta
 # "themes" junto a este archivo. Incluidos: tokyo-night, catppuccin-latte, catppuccin-frappe,
-# catppuccin-macchiato, catppuccin-mocha, gruvbox, nord, dracula, rukes-light.
+# catppuccin-macchiato, catppuccin-mocha, gruvbox, nord, dracula, midnight (negro puro),
+# rukes-light.
 theme = "system"
 light_theme = "catppuccin-latte"
 dark_theme = "tokyo-night"
 
 [window]
-# "center" o "top_center".
+# "center", "top_center" o "bottom_center" (barra abajo, resultados hacia arriba).
 position = "center"
 width = 680
 # Resultados visibles a la vez.
@@ -37,6 +38,8 @@ animations = true
 # Panel de previsualización a la derecha (Ctrl+P lo alterna).
 preview_panel = false
 preview_width = 340
+# Con la búsqueda vacía, mostrar una leyenda con los comandos más útiles (clic para usarlos).
+hints = true
 
 [search]
 # Peso del uso frecuente/reciente frente a la coincidencia de texto (0 a 1).

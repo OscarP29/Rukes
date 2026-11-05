@@ -66,7 +66,13 @@ pub struct SystemPlugin {
 }
 
 /// `(id, clave de título, clave de subtítulo, palabras extra para buscar)`.
-const COMMANDS: [(&str, &str, &str, &str); 5] = [
+const COMMANDS: [(&str, &str, &str, &str); 6] = [
+    (
+        "settings",
+        "system.settings",
+        "system.settings_sub",
+        "rukes settings ajustes preferencias opciones",
+    ),
     (
         "quit",
         "system.quit",
@@ -83,7 +89,7 @@ const COMMANDS: [(&str, &str, &str, &str); 5] = [
         "config",
         "system.config",
         "",
-        "rukes config configuracion settings ajustes",
+        "rukes config configuracion editar toml",
     ),
     (
         "export",
@@ -172,6 +178,7 @@ impl Plugin for SystemPlugin {
                 (self.on_quit)();
                 Ok(ActionOutcome::Hide)
             }
+            "settings" => Ok(ActionOutcome::OpenSettings),
             "reload" => {
                 (self.on_reload)();
                 Ok(ActionOutcome::Hide)

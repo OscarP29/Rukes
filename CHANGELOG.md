@@ -4,6 +4,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Interfaz: ajustes visuales y ayudas
+
+#### Añadido
+- Panel visual de ajustes (escribe «ajustes», pulsa el engranaje de la leyenda o «Ajustes…» en
+  la bandeja): pestañas General, Ventana, Plugins y Extras con interruptores, listas y
+  deslizadores. Guarda solo lo cambiado en `config.toml` conservando los comentarios, valida
+  antes de escribir y se aplica sin reiniciar. `Ctrl+S` guarda, `Esc` vuelve a la búsqueda.
+- Leyenda de comandos con la búsqueda vacía: ejemplos clicables (`= 5 km a mi`, `f:`, `clip`,
+  `vol 50`…) y las teclas principales (`[window] hints`).
+- Botones de acción en la fila seleccionada o bajo el ratón: abrir ubicación, copiar ruta,
+  administrador, abrir con, terminal, editar, borrar, fijar y ver detalles, con su nombre al
+  pasar el ratón.
+- Posición `bottom_center`: la barra queda abajo, los resultados crecen hacia arriba con el
+  mejor junto a la búsqueda y el borde inferior no se mueve.
+- Tema `midnight`: negro puro y opaco, sin Mica ni Acrílico.
+
+#### Cambiado
+- La bandeja tiene «Ajustes…» (abre el panel visual) y «Editar config.toml» (abre el archivo).
+
 ### Fase 8: release 1.0
 
 #### Añadido

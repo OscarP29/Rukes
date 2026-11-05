@@ -11,7 +11,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, GetCursorPos, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId,
     HWND_TOPMOST, IsWindow, IsWindowVisible, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOSIZE,
-    SetForegroundWindow, SetWindowPos, ShowWindow,
+    SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
 };
 
 use crate::Hwnd;
@@ -21,14 +21,30 @@ use crate::Hwnd;
 pub struct Placement {
     /// Fracción del espacio libre por encima de la ventana.
     pub vertical: f32,
+    /// Anclada abajo: el borde inferior queda fijo y la ventana crece hacia arriba.
+    pub bottom: bool,
 }
 
 impl Placement {
     /// Centrada, algo por encima del centro (como Spotlight/PowerToys Run).
-    pub const CENTER: Self = Self { vertical: 0.3 };
+    pub const CENTER: Self = Self {
+        vertical: 0.3,
+        bottom: false,
+    };
     /// Cerca del borde superior.
-    pub const TOP_CENTER: Self = Self { vertical: 0.12 };
+    pub const TOP_CENTER: Self = Self {
+        vertical: 0.12,
+        bottom: false,
+    };
+    /// Cerca del borde inferior (encima de la barra de tareas).
+    pub const BOTTOM_CENTER: Self = Self {
+        vertical: 1.0,
+        bottom: true,
+    };
 }
+
+/// Separación lógica entre la ventana anclada abajo y el borde del área de trabajo.
+const BOTTOM_MARGIN: f32 = 48.0;
 
 fn h(hwnd: Hwnd) -> HWND {
     HWND(hwnd as *mut _)
@@ -64,10 +80,16 @@ pub fn place_on_cursor_monitor(hwnd: Hwnd, placement: Placement, ref_height: f32
         // SAFETY: consulta sin efectos sobre una ventana de este proceso.
         let scale = unsafe { GetDpiForWindow(hwnd) }.max(96) as f32 / 96.0;
         let w = r.right - r.left;
-        let hgt = ((ref_height * scale) as i32).max(r.bottom - r.top);
         let x = work.left + (work.right - work.left - w) / 2;
-        let free = (work.bottom - work.top - hgt).max(0) as f32;
-        let y = work.top + (free * placement.vertical) as i32;
+        let y = if placement.bottom {
+            // El borde inferior se ancla; la altura actual decide dónde empieza.
+            let margin = (BOTTOM_MARGIN * scale) as i32;
+            (work.bottom - margin - (r.bottom - r.top)).max(work.top)
+        } else {
+            let hgt = ((ref_height * scale) as i32).max(r.bottom - r.top);
+            let free = (work.bottom - work.top - hgt).max(0) as f32;
+            work.top + (free * placement.vertical) as i32
+        };
         if r.left == x && r.top == y {
             break;
         }
@@ -84,6 +106,24 @@ pub fn place_on_cursor_monitor(hwnd: Hwnd, placement: Placement, ref_height: f32
             )
         };
     }
+}
+
+/// Cambia el tamaño (lógico) de la ventana manteniendo fijos su borde inferior y su centro
+/// horizontal, en un solo paso para que no parpadee (posición `bottom_center`).
+pub fn resize_keep_bottom(hwnd: Hwnd, width: f32, height: f32) {
+    let hwnd = h(hwnd);
+    let r = rect(hwnd);
+    // SAFETY: consulta sin efectos sobre una ventana de este proceso.
+    let scale = unsafe { GetDpiForWindow(hwnd) }.max(96) as f32 / 96.0;
+    let w = (width * scale).round() as i32;
+    let hgt = (height * scale).round() as i32;
+    if r.right - r.left == w && r.bottom - r.top == hgt {
+        return;
+    }
+    let x = (r.left + r.right) / 2 - w / 2;
+    let y = r.bottom - hgt;
+    // SAFETY: hwnd de este proceso.
+    let _ = unsafe { SetWindowPos(hwnd, None, x, y, w, hgt, SWP_NOACTIVATE | SWP_NOZORDER) };
 }
 
 /// Muestra la ventana y le da el foco aunque otra app esté en primer plano (RF-001). Devuelve la

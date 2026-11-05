@@ -45,6 +45,8 @@ pub enum ActionOutcome {
         /// Devolver después al portapapeles lo que había antes (snippets).
         restore: bool,
     },
+    /// Abrir el panel visual de ajustes del launcher.
+    OpenSettings,
 }
 
 /// Error de un plugin.

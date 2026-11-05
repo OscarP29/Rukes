@@ -1,0 +1,16 @@
+# Tema incluido en Rukes: negro puro y opaco, sin Mica ni Acrílico (ideal para pantallas OLED).
+# Copia este archivo a la carpeta "themes" de tu configuración para modificarlo, o crea uno
+# nuevo con extends = "midnight" y cambia solo lo que quieras.
+[theme]
+name = "Midnight"
+dark = true
+backdrop = "solid"
+opacity = 1.0
+solid_opacity = 1.0
+
+[theme.colors]
+background = "#000000"
+foreground = "#e6e6e6"
+accent = "#8ab4f8"
+selection = "#1c1c1c"
+muted = "#7a7a7a"

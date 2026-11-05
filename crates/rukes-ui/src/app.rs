@@ -10,18 +10,21 @@ use iced::futures::{SinkExt as _, StreamExt as _};
 use iced::keyboard::{self, Key, Modifiers, key::Named};
 use iced::widget::text::{Shaping, Wrapping};
 use iced::widget::{
-    Id, column, container, image, mouse_area, operation, rich_text, row, space, span, text,
-    text_input,
+    Id, button, column, container, image, mouse_area, operation, rich_text, row, space, span, text,
+    text_input, tooltip,
 };
 use iced::{
-    Background, Border, Color, ContentFit, Element, Event, Length, Size, Subscription, Task, event,
-    font, mouse, window,
+    Background, Border, Color, ContentFit, Element, Event, Length, Size, Subscription, Task, Theme,
+    event, font, mouse, window,
 };
 use rukes_core::i18n::tr;
 use rukes_core::{ActionId, ActionOutcome, Icon, QueryBatch, QueryId, ResultItem, ranking};
 
+use crate::panel::{self, Panel};
 use crate::theme::{self, Look};
-use crate::{Host, OnShow, Preview, UiConfig, UiEvent, UiSender};
+use crate::{
+    Host, OnShow, Preview, SettingValue, SettingsForm, UiConfig, UiEvent, UiSender, hints,
+};
 
 /// Resultados que se conservan en memoria (la vista muestra `max_results`).
 const KEEP_RESULTS: usize = 200;
@@ -39,29 +42,49 @@ const SETTLE: Duration = Duration::from_millis(120);
 const PREVIEW_ROWS: usize = 6;
 /// Líneas de texto en la previsualización.
 const PREVIEW_LINES: usize = 40;
+/// Botones de acción como máximo en una fila (además de la acción principal).
+const ROW_ACTIONS: usize = 5;
+/// Icono de «ver detalles» (Segoe MDL2 Assets).
+const ICON_DETAILS: &str = "\u{E946}";
 
 fn input_id() -> Id {
     Id::new("search")
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub(crate) enum Message {
     Ready(window::Id, Option<isize>),
     Inbox(UiEvent),
     Input(String),
     Key(Key, Modifiers),
     Clicked(usize),
+    /// El ratón entra (`true`) o sale de una fila.
+    Hover(usize, bool),
+    /// Botón de acción de una fila.
+    RowAction(usize, String),
+    /// Botón «ver detalles» de una fila.
+    Details(usize),
+    /// Ejemplo de la leyenda: escribe este texto.
+    Hint(String),
     Scrolled(f32),
     ActionDone(Result<ActionOutcome, String>),
     IconLoaded(Icon, Option<image::Handle>),
     PreviewLoaded(PathBuf, Option<Arc<Loaded>>),
     Frame(Instant),
     Unfocused,
+    OpenSettings,
+    PanelLoaded(Option<SettingsForm>),
+    PanelTab(usize),
+    PanelSet(usize, usize, SettingValue),
+    PanelSave,
+    PanelSaved(Result<(), String>),
+    PanelClose,
+    PanelOpenFile,
 }
 
 /// Previsualización con la imagen ya convertida para iced.
 #[derive(Debug)]
-struct Loaded {
+pub(crate) struct Loaded {
     preview: Preview,
     image: Option<image::Handle>,
 }
@@ -121,6 +144,27 @@ struct State {
     fade: Option<Anim>,
     select_anim: Option<(usize, Anim)>,
     resize_anim: Option<(f32, Anim)>,
+    /// Fila bajo el ratón (muestra sus botones de acción).
+    hovered: Option<usize>,
+    /// Panel de ajustes abierto.
+    panel: Option<Panel>,
+    /// Tema de iced con los colores del tema de Rukes (listas, interruptores, deslizadores).
+    theme: Theme,
+}
+
+/// Tema de iced a partir del aspecto: los controles del panel usan los colores de Rukes.
+fn iced_theme(l: &Look) -> Theme {
+    Theme::custom(
+        "Rukes",
+        iced::theme::Palette {
+            background: Color { a: 1.0, ..l.bg },
+            text: l.fg,
+            primary: l.accent,
+            success: l.accent,
+            warning: Color::from_rgb8(0xe0, 0xaf, 0x68),
+            danger: Color::from_rgb8(0xf7, 0x76, 0x8e),
+        },
+    )
 }
 
 /// Mueve la selección `delta` posiciones (con vuelta al principio/fin) y ajusta el desplazamiento
@@ -173,7 +217,18 @@ impl State {
         }
     }
 
+    /// Leyenda de comandos visible: búsqueda vacía y sin resultados.
+    fn hints_visible(&self) -> bool {
+        self.cfg.hints
+            && self.panel.is_none()
+            && self.results.is_empty()
+            && self.query.trim().is_empty()
+    }
+
     fn width(&self) -> f32 {
+        if self.panel.is_some() {
+            return self.cfg.width.max(panel::MIN_WIDTH);
+        }
         if self.preview_on {
             self.cfg.width + 1.0 + self.cfg.preview_width
         } else {
@@ -182,10 +237,15 @@ impl State {
     }
 
     fn height(&self) -> f32 {
+        if self.panel.is_some() {
+            return panel::height(self.look.search_h).round();
+        }
         let rows = self.list_rows();
         let mut h = self.look.search_h;
         if rows > 0 {
             h += 1.0 + rows as f32 * self.look.row_h + theme::LIST_PAD * 2.0;
+        } else if self.hints_visible() {
+            h += 1.0 + hints::height();
         }
         if self.notice.is_some() {
             h += theme::NOTICE_H;
@@ -217,11 +277,23 @@ impl State {
         }
         self.resize_anim = None;
         self.current = target;
-        window::resize(id, target)
+        self.apply_size(id, target)
+    }
+
+    /// Aplica un tamaño. Anclada abajo lo hace la aplicación, que mueve y redimensiona a la vez
+    /// para que el borde inferior no se mueva.
+    fn apply_size(&self, id: window::Id, size: Size) -> Task<Message> {
+        if self.cfg.anchor_bottom {
+            self.host.resize_keep_bottom(size.width, size.height);
+            Task::none()
+        } else {
+            window::resize(id, size)
+        }
     }
 
     fn set_style(&mut self) {
         self.look = Look::new(&self.cfg.style, self.translucent);
+        self.theme = iced_theme(&self.look);
     }
 
     fn run_query(&mut self) -> Task<Message> {
@@ -336,7 +408,24 @@ impl State {
         self.visible = false;
         self.fade = None;
         self.select_anim = None;
+        self.hovered = None;
+        self.panel = None;
         self.host.hide();
+    }
+
+    /// Pide el formulario de ajustes a la aplicación (el panel se abre al llegar).
+    fn open_settings(&mut self) -> Task<Message> {
+        if self.panel.is_some() {
+            return Task::none();
+        }
+        let host = Arc::clone(&self.host);
+        Task::perform(async move { host.settings_form() }, Message::PanelLoaded)
+    }
+
+    /// Cierra el panel y vuelve a la búsqueda.
+    fn close_panel(&mut self) -> Task<Message> {
+        self.panel = None;
+        Task::batch([self.resize(), operation::focus(input_id())])
     }
 
     /// Sustituye la lista (confirmaciones, submenús, salida de scripts).
@@ -347,6 +436,7 @@ impl State {
         self.selected = 0;
         self.offset = 0;
         self.stale = false;
+        self.hovered = None;
         Task::batch([
             self.load_visible_icons(),
             self.load_preview(),
@@ -411,7 +501,7 @@ impl State {
             return Task::none();
         }
         self.current = Size::new(target.width, h);
-        window::resize(id, self.current)
+        self.apply_size(id, self.current)
     }
 }
 
@@ -452,6 +542,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 s.offset = scroll_to(s.selected, s.offset, s.results.len(), s.cfg.max_results);
                 Task::batch([s.resize(), s.load_visible_icons(), s.load_preview()])
             }
+            UiEvent::OpenSettings => s.open_settings(),
             UiEvent::Notice(n) => {
                 s.notice = Some(n);
                 s.resize()
@@ -465,6 +556,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.selected = 0;
                     s.offset = 0;
                     s.stale = false;
+                    s.hovered = None;
                 }
                 ranking::merge(&mut s.results, b.items, KEEP_RESULTS);
                 s.selected = s.selected.min(s.results.len().saturating_sub(1));
@@ -482,6 +574,11 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
             s.notice = None;
             s.run_query()
         }
+        Message::Key(key, m) if s.panel.is_some() => match key.as_ref() {
+            Key::Named(Named::Escape) => s.close_panel(),
+            Key::Character("s") if m.control() => update(s, Message::PanelSave),
+            _ => Task::none(),
+        },
         Message::Key(key, m) => {
             let visible = s.cfg.max_results;
             let len = s.results.len();
@@ -489,18 +586,21 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 let (sel, off) = move_selection(s.selected, s.offset, len, visible, d);
                 s.select(sel, off)
             };
+            // Anclada abajo el mejor resultado queda junto a la búsqueda: «abajo» es volver.
+            let down: isize = if s.cfg.anchor_bottom { -1 } else { 1 };
+            let page = visible as isize * down;
             match key.as_ref() {
                 Key::Named(Named::Escape) => {
                     s.hide();
                     Task::none()
                 }
-                Key::Named(Named::ArrowDown) => mv(s, 1),
-                Key::Named(Named::ArrowUp) => mv(s, -1),
+                Key::Named(Named::ArrowDown) => mv(s, down),
+                Key::Named(Named::ArrowUp) => mv(s, -down),
                 Key::Named(Named::Tab) => mv(s, if m.shift() { -1 } else { 1 }),
-                Key::Named(Named::PageDown) => mv(s, visible as isize),
-                Key::Named(Named::PageUp) => mv(s, -(visible as isize)),
-                Key::Character("j") if m.control() => mv(s, 1),
-                Key::Character("k") if m.control() => mv(s, -1),
+                Key::Named(Named::PageDown) => mv(s, page),
+                Key::Named(Named::PageUp) => mv(s, -page),
+                Key::Character("j") if m.control() => mv(s, down),
+                Key::Character("k") if m.control() => mv(s, -down),
                 Key::Named(Named::Enter) => {
                     let action = if m.control() && m.shift() {
                         ActionId::OPEN_LOCATION.to_owned()
@@ -541,7 +641,102 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 .unwrap_or_default();
             Task::batch([load, s.execute(i, &action)])
         }
+        Message::Hover(i, inside) => {
+            if inside {
+                s.hovered = Some(i);
+            } else if s.hovered == Some(i) {
+                s.hovered = None;
+            }
+            Task::none()
+        }
+        Message::RowAction(i, action) => {
+            let off = s.offset;
+            let load = s.select(i, off);
+            Task::batch([load, s.execute(i, &action)])
+        }
+        Message::Details(i) => {
+            let off = s.offset;
+            if s.preview_on && i == s.selected {
+                s.preview_on = false;
+                return s.resize();
+            }
+            s.preview_on = true;
+            let load = s.select(i, off);
+            Task::batch([load, s.resize(), s.load_preview()])
+        }
+        Message::Hint(q) => {
+            s.query = q;
+            s.notice = None;
+            Task::batch([
+                s.run_query(),
+                operation::focus(input_id()),
+                operation::move_cursor_to_end(input_id()),
+            ])
+        }
+        Message::OpenSettings => s.open_settings(),
+        Message::PanelLoaded(form) => match form {
+            Some(form) if s.visible => {
+                s.panel = Some(Panel::new(form));
+                s.select_anim = None;
+                s.hovered = None;
+                s.resize()
+            }
+            Some(_) => Task::none(),
+            None => {
+                s.notice = Some(tr("settings.unavailable").to_owned());
+                s.resize()
+            }
+        },
+        Message::PanelTab(i) => {
+            if let Some(p) = &mut s.panel {
+                p.tab = i.min(p.form.sections.len().saturating_sub(1));
+            }
+            Task::none()
+        }
+        Message::PanelSet(sec, field, value) => {
+            if let Some(p) = &mut s.panel {
+                p.set(sec, field, value);
+            }
+            Task::none()
+        }
+        Message::PanelSave => {
+            let Some(p) = &mut s.panel else {
+                return Task::none();
+            };
+            if p.saving {
+                return Task::none();
+            }
+            let changes = p.changes();
+            if changes.is_empty() {
+                return s.close_panel();
+            }
+            p.saving = true;
+            let host = Arc::clone(&s.host);
+            Task::perform(
+                async move { host.save_settings(&changes) },
+                Message::PanelSaved,
+            )
+        }
+        Message::PanelSaved(res) => match res {
+            Ok(()) => {
+                s.notice = Some(tr("settings.saved").to_owned());
+                s.close_panel()
+            }
+            Err(e) => {
+                if let Some(p) = &mut s.panel {
+                    p.saving = false;
+                    p.error = Some(e);
+                }
+                Task::none()
+            }
+        },
+        Message::PanelClose => s.close_panel(),
+        Message::PanelOpenFile => {
+            s.host.open_config_file();
+            Task::none()
+        }
         Message::Scrolled(lines) => {
+            let lines = if s.cfg.anchor_bottom { -lines } else { lines };
             let max_off = s.results.len().saturating_sub(s.cfg.max_results);
             let off = (s.offset as f32 - lines).round().clamp(0.0, max_off as f32) as usize;
             let sel = s
@@ -568,6 +763,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.resize()
                 }
                 Ok(ActionOutcome::ShowResults(items)) => s.show_results(items),
+                Ok(ActionOutcome::OpenSettings) => s.open_settings(),
                 Ok(ActionOutcome::Paste {
                     text,
                     cursor_left,
@@ -698,6 +894,101 @@ fn selection_alpha(s: &State, i: usize) -> f32 {
     }
 }
 
+/// Icono de cada acción conocida (Segoe MDL2 Assets).
+fn action_glyph(id: &str) -> &'static str {
+    match id {
+        ActionId::OPEN => "\u{E8A7}",
+        ActionId::RUN_AS_ADMIN => "\u{EA18}",
+        ActionId::OPEN_LOCATION => "\u{E838}",
+        ActionId::COPY_PATH => "\u{E8C8}",
+        ActionId::OPEN_WITH => "\u{E7AC}",
+        ActionId::TERMINAL_HERE => "\u{E756}",
+        ActionId::EDIT => "\u{E70F}",
+        ActionId::DELETE => "\u{E74D}",
+        ActionId::PIN => "\u{E718}",
+        _ => "\u{E712}",
+    }
+}
+
+/// Botón de icono con su descripción al pasar el ratón.
+fn icon_button<'a>(
+    l: &Look,
+    glyph: &'static str,
+    label: &'a str,
+    color: Color,
+    msg: Message,
+) -> Element<'a, Message> {
+    let (accent, radius, fg, bg) = (l.accent, l.radius, l.fg, l.bg);
+    let tip = container(txt(label).size(l.small() - 1.0).color(fg))
+        .padding([3.0, 8.0])
+        .style(move |_| container::Style {
+            background: Some(Background::Color(Color { a: 0.96, ..bg })),
+            border: Border {
+                radius: radius.into(),
+                width: 1.0,
+                color: Color { a: 0.4, ..accent },
+            },
+            ..container::Style::default()
+        });
+    tooltip(
+        button(
+            text(glyph)
+                .font(panel::icon_font())
+                .size((l.size * 0.9).round())
+                .color(color),
+        )
+        .padding([6.0, 7.0])
+        .on_press(msg)
+        .style(move |_, status| button::Style {
+            background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+                .then_some(Background::Color(Color { a: 0.22, ..accent })),
+            text_color: color,
+            border: Border {
+                radius: radius.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        }),
+        tip,
+        tooltip::Position::Left,
+    )
+    .gap(4)
+    .into()
+}
+
+/// Botones de las acciones secundarias de una fila y «ver detalles».
+fn row_actions<'a>(
+    l: &Look,
+    i: usize,
+    item: &'a ResultItem,
+    selected: bool,
+) -> Option<Element<'a, Message>> {
+    let color = if selected { l.sel_fg } else { l.muted };
+    let mut buttons = row![].spacing(2).align_y(iced::Alignment::Center);
+    let mut any = false;
+    for a in item.actions.iter().skip(1).take(ROW_ACTIONS) {
+        buttons = buttons.push(icon_button(
+            l,
+            action_glyph(&a.id.0),
+            tr(&a.title),
+            color,
+            Message::RowAction(i, a.id.0.clone()),
+        ));
+        any = true;
+    }
+    if item.preview.is_some() || item.detail.is_some() {
+        buttons = buttons.push(icon_button(
+            l,
+            ICON_DETAILS,
+            tr("action.details"),
+            color,
+            Message::Details(i),
+        ));
+        any = true;
+    }
+    any.then(|| buttons.into())
+}
+
 fn result_row<'a>(s: &'a State, l: &Look, i: usize, item: &'a ResultItem) -> Element<'a, Message> {
     let fade = s.fade.map_or(1.0, |a| a.at(s.now));
     let icon: Element<'_, Message> = match s.icons.get(&item.icon) {
@@ -725,32 +1016,41 @@ fn result_row<'a>(s: &'a State, l: &Look, i: usize, item: &'a ResultItem) -> Ele
             .color(if selected { l.sel_muted } else { l.muted })
             .wrapping(Wrapping::None),
     ]
-    .spacing(1);
+    .spacing(1)
+    .width(Length::Fill);
     let bg = Color {
         a: l.selection.a * sel,
         ..l.selection
     };
     let radius = l.radius;
-    let body = container(
-        row![icon, texts]
-            .spacing(l.spacing)
-            .align_y(iced::Alignment::Center),
-    )
-    .padding([0.0, l.pad])
-    .width(Length::Fill)
-    .height(l.row_h)
-    .align_y(iced::alignment::Vertical::Center)
-    .clip(true)
-    .style(move |_| container::Style {
-        background: (sel > 0.0).then_some(Background::Color(bg)),
-        border: Border {
-            radius: radius.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
+    let mut line = row![icon, texts]
+        .spacing(l.spacing)
+        .align_y(iced::Alignment::Center);
+    // Los botones aparecen en la fila seleccionada o bajo el ratón.
+    if (selected || s.hovered == Some(i))
+        && s.fade.is_none()
+        && let Some(actions) = row_actions(l, i, item, selected)
+    {
+        line = line.push(actions);
+    }
+    let body = container(line)
+        .padding([0.0, l.pad])
+        .width(Length::Fill)
+        .height(l.row_h)
+        .align_y(iced::alignment::Vertical::Center)
+        .clip(true)
+        .style(move |_| container::Style {
+            background: (sel > 0.0).then_some(Background::Color(bg)),
+            border: Border {
+                radius: radius.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
     mouse_area(body)
         .on_press(Message::Clicked(i))
+        .on_enter(Message::Hover(i, true))
+        .on_exit(Message::Hover(i, false))
         .interaction(mouse::Interaction::Pointer)
         .into()
 }
@@ -924,6 +1224,9 @@ fn view(s: &State) -> Element<'_, Message> {
     let fade = s.fade.map_or(1.0, |a| a.at(s.now));
     let l = s.look.faded(fade);
     let (fg, muted, accent) = (l.fg, l.muted, l.accent);
+    if let Some(p) = &s.panel {
+        return frame(&l, panel::view(p, &l, l.search_h));
+    }
     let input = text_input(tr("search.placeholder"), &s.query)
         .id(input_id())
         .on_input(Message::Input)
@@ -939,20 +1242,31 @@ fn view(s: &State) -> Element<'_, Message> {
             selection: Color { a: 0.45, ..accent },
         });
 
-    let mut col = column![
-        container(input)
-            .height(l.search_h)
-            .align_y(iced::alignment::Vertical::Center)
-    ];
+    let search: Element<'_, Message> = container(input)
+        .height(l.search_h)
+        .align_y(iced::alignment::Vertical::Center)
+        .into();
+    // Lo que va debajo de la búsqueda, de arriba abajo; anclada abajo se invierte y va encima.
+    let mut parts: Vec<Element<'_, Message>> = Vec::new();
     let rows = s.visible_rows();
+    if rows == 0 && s.hints_visible() {
+        parts.push(divider(l.divider, false));
+        parts.push(hints::view(&l));
+    }
     if rows > 0 {
-        col = col.push(divider(l.divider, false));
-        let list = s
+        parts.push(divider(l.divider, false));
+        let mut visible: Vec<_> = s
             .results
             .iter()
             .enumerate()
             .skip(s.offset)
             .take(rows)
+            .collect();
+        if s.cfg.anchor_bottom {
+            visible.reverse();
+        }
+        let list = visible
+            .into_iter()
             .fold(column![].spacing(0), |c, (i, item)| {
                 c.push(result_row(s, &l, i, item))
             });
@@ -970,23 +1284,38 @@ fn view(s: &State) -> Element<'_, Message> {
             })
         });
         if s.preview_on {
-            col = col.push(
+            parts.push(
                 row![list, divider(l.divider, true), preview_panel(s, &l)]
-                    .height(s.list_rows() as f32 * l.row_h + theme::LIST_PAD * 2.0),
+                    .height(s.list_rows() as f32 * l.row_h + theme::LIST_PAD * 2.0)
+                    .into(),
             );
         } else {
-            col = col.push(list);
+            parts.push(list.into());
         }
     }
     if let Some(n) = &s.notice {
-        col = col.push(
+        parts.push(
             container(txt(n.as_str()).size(l.small()).color(l.muted))
                 .padding([6, 20])
-                .height(theme::NOTICE_H),
+                .height(theme::NOTICE_H)
+                .into(),
         );
     }
-    let bg = l.bg;
-    container(col)
+    // La búsqueda ocupa siempre el mismo hueco de la columna: iced guarda el foco del campo por
+    // posición, y si se moviera (al aparecer o irse la leyenda o la lista) lo perdería.
+    let content = if s.cfg.anchor_bottom {
+        parts.reverse();
+        column![column(parts).height(Length::Fill), search]
+    } else {
+        column![search, column(parts).height(Length::Fill)]
+    };
+    frame(&l, content.into())
+}
+
+/// Fondo de la ventana alrededor del contenido.
+fn frame<'a>(l: &Look, content: Element<'a, Message>) -> Element<'a, Message> {
+    let (bg, fg) = (l.bg, l.fg);
+    container(content)
         .width(Length::Fill)
         .height(Length::Fill)
         .clip(true)
@@ -1063,6 +1392,9 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
             fade: None,
             select_anim: None,
             resize_anim: None,
+            hovered: None,
+            panel: None,
+            theme: iced_theme(&look),
         };
         let ready = window::oldest().then(|id| {
             let Some(id) = id else { return Task::none() };
@@ -1081,6 +1413,7 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
     iced::application(boot, update, view)
         .title("Rukes")
         .subscription(subscription)
+        .theme(|s: &State| s.theme.clone())
         .default_font(look.font)
         .window(window::Settings {
             size: initial,

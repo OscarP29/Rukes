@@ -134,6 +134,9 @@ pub enum WindowPosition {
     Center,
     /// Centrada horizontalmente, cerca del borde superior.
     TopCenter,
+    /// Centrada horizontalmente, cerca del borde inferior: la barra de búsqueda queda abajo y
+    /// los resultados crecen hacia arriba.
+    BottomCenter,
 }
 
 /// Qué hacer con la búsqueda anterior al mostrar la ventana (RF-004).
@@ -175,6 +178,8 @@ pub struct Window {
     pub preview_panel: bool,
     /// Ancho lógico del panel de previsualización.
     pub preview_width: u32,
+    /// Con la búsqueda vacía, mostrar una leyenda con los comandos más útiles.
+    pub hints: bool,
 }
 
 impl Default for Window {
@@ -190,6 +195,7 @@ impl Default for Window {
             animations: true,
             preview_panel: false,
             preview_width: 340,
+            hints: true,
         }
     }
 }

@@ -156,3 +156,10 @@ suma: el CRT enlazado estáticamente (RNF-031), las API de Windows nuevas (audio
 Everything), el esquema de la configuración (schemars) y el icono de 16 a 256 px. Queda a
 0,5 MB del límite de 15 MB (RNF-008); CI falla si se supera. Margen posible si hiciera falta:
 `opt-level = "z"` en crates fríos o quitar los tamaños grandes del icono.
+
+### Panel de ajustes, leyenda y botones de acción
+
+El panel visual (listas, interruptores, deslizadores, `toml_edit`) subió el binario a 14,8 MB.
+Con Rhai compilado con `opt-level = "s"` (`[profile.release.package.rhai]`; los scripts no
+están en el camino de la búsqueda) queda en **14,55 MB** (15 256 576 bytes), 0,45 MB
+por debajo del límite.

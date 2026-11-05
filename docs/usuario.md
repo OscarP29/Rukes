@@ -33,6 +33,11 @@ Rukes queda residente con un icono en la bandeja. Para que arranque con Windows 
 
 Rukes aprende: lo que eliges más a menudo para una búsqueda sube en la lista.
 
+Con la búsqueda vacía aparece una **leyenda** con ejemplos: haz clic en uno para escribirlo.
+En la fila seleccionada (o bajo el ratón) aparecen **botones** con las demás acciones (abrir
+la carpeta, copiar la ruta, como administrador, ver detalles…); pasa el ratón por encima para
+ver qué hace cada uno. La leyenda se quita con `hints = false` en `[window]`.
+
 ## Qué puedes escribir
 
 ### Apps y archivos
@@ -106,11 +111,21 @@ admin = false
 
 ## Configuración
 
-- Escribe `configuración` en Rukes para abrir `config.toml` (`%APPDATA%\Rukes\config.toml`).
-  Los cambios se aplican al guardar, sin reiniciar.
+- **Panel de ajustes:** escribe `ajustes`, pulsa «Ajustes» en la leyenda o elige «Ajustes…» en
+  el icono de la bandeja. Tiene pestañas para lo general (tema, idioma, atajo, inicio con
+  Windows), la ventana (posición, ancho, resultados, leyenda, fondo), los plugins y los extras
+  (divisas, Everything…). `Guardar` (o `Ctrl+S`) escribe solo lo cambiado y conserva tus
+  comentarios; `Esc` vuelve a la búsqueda.
+- **Archivo:** escribe `configuración` (o «Editar config.toml» en el panel) para abrir
+  `config.toml` (`%APPDATA%\Rukes\config.toml`), donde está todo lo demás. Los cambios se
+  aplican al guardar, sin reiniciar.
+- **Posición:** `position = "center"`, `"top_center"` o `"bottom_center"` en `[window]`. Abajo,
+  la barra queda junto a la barra de tareas y los resultados crecen hacia arriba, con el mejor
+  pegado a la búsqueda (`↑` sube a los siguientes).
 - **Autocompletado:** junto a `config.toml` se genera `config.schema.json`. Con VS Code y la
   extensión *Even Better TOML* tienes autocompletado, descripciones y validación.
-- **Temas:** `theme = "tokyo-night"`, `"catppuccin-mocha"`, `"nord"`, `"system"`… Copia un
+- **Temas:** `theme = "tokyo-night"`, `"catppuccin-mocha"`, `"nord"`, `"midnight"` (negro
+  puro, sin transparencia), `"system"`… Copia un
   archivo de `themes` a la carpeta `themes` de tu configuración para crear uno propio.
 - **Idioma:** `language = "auto"`, `"es"` o `"en"`.
 

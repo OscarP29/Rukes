@@ -1,6 +1,7 @@
 //! Configuración, temas y recarga en caliente de Rukes.
 #![forbid(unsafe_code)]
 
+pub mod edit;
 mod hotkey;
 pub mod paths;
 mod schema;

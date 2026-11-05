@@ -5,6 +5,8 @@
 #![forbid(unsafe_code)]
 
 mod app;
+mod hints;
+mod panel;
 mod theme;
 
 use std::path::Path;
@@ -45,6 +47,81 @@ pub trait Host: Send + Sync + 'static {
     fn preview(&self, _path: &Path) -> Option<Preview> {
         None
     }
+    /// Cambia el tamaño lógico de la ventana manteniendo fijo su borde inferior (posición
+    /// `bottom_center`).
+    fn resize_keep_bottom(&self, _width: f32, _height: f32) {}
+    /// Formulario del panel de ajustes con los valores actuales (bloqueante).
+    fn settings_form(&self) -> Option<SettingsForm> {
+        None
+    }
+    /// Guarda los ajustes cambiados en `config.toml` (bloqueante). Se aplican al recargarse.
+    fn save_settings(&self, _changes: &[(String, SettingValue)]) -> Result<(), String> {
+        Err("sin soporte".into())
+    }
+    /// Abre `config.toml` en el editor.
+    fn open_config_file(&self) {}
+}
+
+/// Valor de un ajuste del panel visual.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettingValue {
+    /// Sí o no.
+    Bool(bool),
+    /// Número entero.
+    Int(i64),
+    /// Texto o una de las opciones de una lista.
+    Text(String),
+}
+
+/// Tipo de control de un ajuste.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettingKind {
+    /// Interruptor (`SettingValue::Bool`).
+    Toggle,
+    /// Lista de opciones `(valor, etiqueta)` (`SettingValue::Text`).
+    Choice(Vec<(String, String)>),
+    /// Número entre `min` y `max` (`SettingValue::Int`).
+    Number {
+        /// Mínimo.
+        min: i64,
+        /// Máximo.
+        max: i64,
+        /// Paso.
+        step: i64,
+    },
+    /// Texto libre (`SettingValue::Text`).
+    Text,
+}
+
+/// Un ajuste del panel visual.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingField {
+    /// Ruta en `config.toml`, p. ej. `window.position`.
+    pub key: String,
+    /// Nombre visible.
+    pub label: String,
+    /// Explicación breve (puede estar vacía).
+    pub help: String,
+    /// Control.
+    pub kind: SettingKind,
+    /// Valor actual.
+    pub value: SettingValue,
+}
+
+/// Grupo de ajustes (una pestaña del panel).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingsSection {
+    /// Título de la pestaña.
+    pub title: String,
+    /// Ajustes.
+    pub fields: Vec<SettingField>,
+}
+
+/// Formulario completo del panel de ajustes.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SettingsForm {
+    /// Pestañas.
+    pub sections: Vec<SettingsSection>,
 }
 
 /// Contenido del panel de previsualización.
@@ -167,6 +244,10 @@ pub struct UiConfig {
     pub preview_panel: bool,
     /// Ancho del panel.
     pub preview_width: f32,
+    /// Ventana anclada abajo: la búsqueda va debajo y la lista crece hacia arriba.
+    pub anchor_bottom: bool,
+    /// Leyenda de comandos con la búsqueda vacía.
+    pub hints: bool,
 }
 
 impl Default for UiConfig {
@@ -181,6 +262,8 @@ impl Default for UiConfig {
             animations: true,
             preview_panel: false,
             preview_width: 340.0,
+            anchor_bottom: false,
+            hints: true,
         }
     }
 }
@@ -194,6 +277,8 @@ pub enum UiEvent {
     Hide,
     /// Nueva configuración.
     Config(UiConfig),
+    /// Abrir el panel de ajustes (desde la bandeja). La aplicación muestra antes la ventana.
+    OpenSettings,
     /// Mensaje breve para el usuario (errores de config, avisos).
     Notice(String),
     /// Resultados del motor.

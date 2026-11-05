@@ -29,6 +29,8 @@ pub fn ui(c: &Config, style: UiStyle, animations: bool, scale: f32) -> UiConfig 
         animations: c.window.animations && animations,
         preview_panel: c.window.preview_panel,
         preview_width: (c.window.preview_width.clamp(200, 900) as f32 * scale).round(),
+        anchor_bottom: c.window.position == WindowPosition::BottomCenter,
+        hints: c.window.hints,
     }
 }
 
@@ -36,6 +38,7 @@ pub fn placement(c: &Config) -> Placement {
     match c.window.position {
         WindowPosition::Center => Placement::CENTER,
         WindowPosition::TopCenter => Placement::TOP_CENTER,
+        WindowPosition::BottomCenter => Placement::BOTTOM_CENTER,
     }
 }
 

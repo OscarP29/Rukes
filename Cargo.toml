@@ -63,5 +63,10 @@ strip = true
 debug = false
 # panic = "unwind" se mantiene: RNF-010 necesita catch_unwind para aislar plugins.
 
+# Rhai (scripts de usuario) no está en el camino de la búsqueda: se optimiza por tamaño para
+# dejar margen al límite de 15 MB del binario (RNF-008).
+[profile.release.package.rhai]
+opt-level = "s"
+
 [profile.dev]
 debug = "line-tables-only"
