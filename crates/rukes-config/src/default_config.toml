@@ -186,3 +186,12 @@ py = "python"
 js = "node"
 ts = "deno run"
 lua = "lua"
+
+[workflows]
+# Workflows ("modo trabajo") y triggers programados, en archivos .toml de la carpeta. La primera
+# vez se crean ejemplos. Escribe "workflows" o "triggers" en el launcher para verlos.
+enabled = true
+# Carpeta. Vacío = "workflows" dentro de la carpeta de configuración. Admite ~ y %VAR%.
+dir = ""
+# false = los triggers no se ejecutan (también se pausan desde el icono de la bandeja).
+triggers = true

@@ -63,3 +63,9 @@ pub fn trim_working_set() {
     // SAFETY: pseudo-handle del proceso actual, con permisos completos sobre sí mismo.
     let _ = unsafe { EmptyWorkingSet(GetCurrentProcess()) };
 }
+
+/// Segundos desde que arrancó Windows.
+pub fn uptime_secs() -> u64 {
+    // SAFETY: sin precondiciones.
+    unsafe { windows::Win32::System::SystemInformation::GetTickCount64() / 1000 }
+}

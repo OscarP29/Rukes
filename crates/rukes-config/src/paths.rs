@@ -84,6 +84,11 @@ impl Paths {
         self.config_dir.join("snippets")
     }
 
+    /// Workflows por defecto.
+    pub fn workflows_dir(&self) -> PathBuf {
+        self.config_dir.join("workflows")
+    }
+
     /// Notas y tareas por defecto.
     pub fn notes_dir(&self) -> PathBuf {
         self.config_dir.join("notes")

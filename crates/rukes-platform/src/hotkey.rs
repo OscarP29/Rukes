@@ -149,6 +149,113 @@ impl Drop for HotkeyManager {
     }
 }
 
+type SetReply = crossbeam_channel::Sender<Vec<Result<()>>>;
+type SetJob = Arc<Mutex<Option<(Vec<VkHotkey>, SetReply)>>>;
+
+/// Varios atajos globales en un hilo propio (atajos de scripts y workflows, RF-162).
+pub struct HotkeySet {
+    thread_id: u32,
+    pending: SetJob,
+}
+
+impl HotkeySet {
+    /// Arranca el hilo. `on_press` recibe la posición del atajo en la última lista de
+    /// [`HotkeySet::set_all`]; se llama en ese hilo, que puede poner ventanas en primer plano.
+    pub fn spawn(on_press: impl Fn(usize) + Send + 'static) -> Result<Self> {
+        let pending: SetJob = Arc::default();
+        let (tid_tx, tid_rx) = crossbeam_channel::bounded(1);
+        let slot = Arc::clone(&pending);
+        std::thread::Builder::new()
+            .name("rukes-hotkeys".into())
+            .spawn(move || {
+                let mut msg = MSG::default();
+                // SAFETY: crea la cola de mensajes del hilo antes de anunciar su id.
+                unsafe {
+                    let _ = PeekMessageW(&mut msg, None, 0, 0, PM_NOREMOVE);
+                }
+                // SAFETY: sin precondiciones.
+                let _ = tid_tx.send(unsafe { GetCurrentThreadId() });
+                let mut registered: Vec<i32> = Vec::new();
+                let unregister_all = |ids: &mut Vec<i32>| {
+                    for id in ids.drain(..) {
+                        // SAFETY: atajo propio de este hilo.
+                        let _ = unsafe { UnregisterHotKey(None, id) };
+                    }
+                };
+                // SAFETY: bucle de mensajes estándar del hilo; `msg` es local.
+                while unsafe { GetMessageW(&mut msg, None, 0, 0) }.as_bool() {
+                    match msg.message {
+                        WM_HOTKEY => {
+                            let id = msg.wParam.0 as i32;
+                            if id >= 1 {
+                                on_press((id - 1) as usize);
+                            }
+                        }
+                        WM_SET_HOTKEY => {
+                            let job = slot.lock().ok().and_then(|mut s| s.take());
+                            if let Some((list, reply)) = job {
+                                unregister_all(&mut registered);
+                                let results = list
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, hk)| {
+                                        let id = i as i32 + 1;
+                                        // SAFETY: registro de un atajo propio de este hilo.
+                                        let r = unsafe {
+                                            RegisterHotKey(
+                                                None,
+                                                id,
+                                                HOT_KEY_MODIFIERS(hk.mods),
+                                                hk.vk,
+                                            )
+                                        };
+                                        if r.is_ok() {
+                                            registered.push(id);
+                                        }
+                                        r.map_err(|source| PlatformError::Win32 {
+                                            context: "RegisterHotKey (¿atajo ya en uso?)",
+                                            source,
+                                        })
+                                    })
+                                    .collect();
+                                let _ = reply.send(results);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                unregister_all(&mut registered);
+            })
+            .map_err(|e| PlatformError::Invalid(e.to_string()))?;
+        let thread_id = tid_rx
+            .recv()
+            .map_err(|e| PlatformError::Invalid(e.to_string()))?;
+        Ok(Self { thread_id, pending })
+    }
+
+    /// Sustituye todos los atajos. Devuelve el resultado de cada uno, en el mismo orden.
+    pub fn set_all(&self, list: Vec<VkHotkey>) -> Result<Vec<Result<()>>> {
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        if let Ok(mut s) = self.pending.lock() {
+            *s = Some((list, tx));
+        }
+        // SAFETY: mensaje a un hilo propio y vivo.
+        unsafe { PostThreadMessageW(self.thread_id, WM_SET_HOTKEY, WPARAM(0), LPARAM(0)) }
+            .map_err(|source| PlatformError::Win32 {
+                context: "PostThreadMessageW",
+                source,
+            })?;
+        rx.recv().map_err(|e| PlatformError::Invalid(e.to_string()))
+    }
+}
+
+impl Drop for HotkeySet {
+    fn drop(&mut self) {
+        // SAFETY: mensaje a un hilo propio.
+        let _ = unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0)) };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

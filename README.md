@@ -36,6 +36,7 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `firma Ana`, `snip` | Snippets con variables y campos (`{fecha}`, `{cursor}`, `{campo:Nombre}`) |
 | `note idea`, `todo comprar pan`, `todo` | Notas y tareas en Markdown (Enter completa una tarea) |
 | `remind 15m llamar a Ana`, `recordar 14:30 reunión` | Recordatorios con notificación |
+| `modo trabajo`, `workflows`, `triggers` | Workflows (apps y webs colocadas en tus monitores) y triggers programados |
 
 | Tecla | Acción |
 | --- | --- |
@@ -65,6 +66,8 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
   `[plugins.clipboard] exclude`; `enabled = false` deja de escuchar el portapapeles.
 - **Snippets, notas y tareas:** carpeta `snippets` y archivos `notes/notas.md` y
   `notes/tareas.md` junto a `config.toml` (configurables; sirven en Obsidian).
+- **Workflows y triggers:** archivos `.toml` de la carpeta `workflows` junto a `config.toml`
+  (la primera vez se crean ejemplos comentados). Los triggers se pausan desde la bandeja.
 - **Salir:** escribe «salir» en el launcher o usa el menú del icono de la bandeja.
 - **Iniciar con Windows:** `start_with_windows = true` en `[general]`.
 - **Logs:** `%LOCALAPPDATA%\Rukes\logs`.

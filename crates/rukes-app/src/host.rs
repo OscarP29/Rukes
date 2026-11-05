@@ -7,16 +7,18 @@ use std::time::{Duration, Instant};
 use rukes_config::DirWatcher;
 use rukes_config::theme::Theme;
 use rukes_config::{Config, ConfigError, Hotkey};
-use rukes_core::i18n::tr;
+use rukes_core::i18n::{tr, trf};
 use rukes_core::{ActionOutcome, Engine, Icon, Plugin, QueryId, ResultItem};
 use rukes_platform::clipwatch::{Change, ClipboardWatcher};
-use rukes_platform::hotkey::{self, HotkeyManager};
+use rukes_platform::hotkey::{self, HotkeyManager, HotkeySet};
 use rukes_platform::tray::{MenuEntry, Tray};
 use rukes_platform::{autostart, dwm, icons, window};
+use rukes_plugins::workflows::{Hooks as WorkflowHooks, Runner, Scheduler, Target};
 use rukes_plugins::{
     AppsPlugin, CalcPlugin, ClipHistory, ClipboardPlugin, FileIndex, FilesPlugin, GeneratorsPlugin,
     NotesPlugin, ProcessesPlugin, RemindPlugin, RemindStore, ShellPlugin, ShellSettings,
     SnippetStore, SnippetsPlugin, SystemCommandsPlugin, TodoPlugin, WebPlugin, WindowsPlugin,
+    WorkflowStore, WorkflowsPlugin,
 };
 use rukes_script::{Catalog, Hooks, RunContext, Runs, Scripts, ScriptsPlugin};
 use rukes_ui::{Host, IconRgba, Preview, Sink, UiConfig, UiEvent, UiSender, UiStyle};
@@ -36,6 +38,7 @@ const TRAY_SETTINGS: u16 = 2;
 const TRAY_RELOAD: u16 = 3;
 const TRAY_PAUSE: u16 = 4;
 const TRAY_QUIT: u16 = 5;
+const TRAY_TRIGGERS: u16 = 6;
 
 /// Nombre del valor en la clave `Run`.
 const AUTOSTART_NAME: &str = "Rukes";
@@ -96,7 +99,21 @@ pub struct AppHost {
     snippets: Mutex<Option<SnippetSlot>>,
     /// Recordatorios (un solo hilo de aviso aunque se recarguen los plugins).
     reminders: Mutex<Option<Arc<RemindStore>>>,
+    /// Plugin de scripts vigente (para ejecutar scripts desde workflows, triggers y atajos).
+    scripts_plugin: Mutex<Option<Arc<ScriptsPlugin>>>,
+    /// Workflows: carpeta, ejecutor, planificador y vigilante.
+    workflows: Mutex<Option<WorkflowSlot>>,
+    /// Atajos propios de scripts y workflows (RF-162) y lo que ejecuta cada uno.
+    extra_hotkeys: Mutex<Option<HotkeySet>>,
+    hotkey_targets: Arc<Mutex<Vec<Target>>>,
 }
+
+type WorkflowSlot = (
+    std::path::PathBuf,
+    Arc<Runner>,
+    Arc<Scheduler>,
+    Option<DirWatcher>,
+);
 
 type SnippetSlot = (std::path::PathBuf, Arc<SnippetStore>, Option<DirWatcher>);
 
@@ -147,6 +164,10 @@ impl AppHost {
             clip: Mutex::new(None),
             snippets: Mutex::new(None),
             reminders: Mutex::new(None),
+            scripts_plugin: Mutex::new(None),
+            workflows: Mutex::new(None),
+            extra_hotkeys: Mutex::new(None),
+            hotkey_targets: Arc::default(),
         }
     }
 
@@ -310,10 +331,15 @@ impl AppHost {
         }
         drop(files);
         self.text_plugins(config, &mut plugins);
+        self.workflow_plugins(config, &mut plugins);
         if config.scripts.enabled {
             plugins.push(Arc::new(self.scripts_plugin(config)));
         } else {
             *self.scripts.lock().unwrap_or_else(|p| p.into_inner()) = None;
+            *self
+                .scripts_plugin
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()) = None;
         }
         let quit_host = Arc::downgrade(self);
         let reload_engine = Arc::clone(&self.engine);
@@ -327,6 +353,244 @@ impl AppHost {
             on_reload: Box::new(move || reload_engine.refresh_all()),
         }));
         self.engine.set_plugins(plugins);
+        self.refresh_hotkeys();
+    }
+
+    /// Workflows y triggers (secciones 5.14 y 5.15). El almacén, el planificador y el vigilante
+    /// se conservan entre recargas si la carpeta no cambia.
+    fn workflow_plugins(self: &Arc<Self>, config: &Config, plugins: &mut Vec<Arc<dyn Plugin>>) {
+        let mut slot = self.workflows.lock().unwrap_or_else(|p| p.into_inner());
+        if !config.workflows.enabled {
+            *slot = None;
+            return;
+        }
+        let dir = settings::workflows_dir(config, &self.paths);
+        let (runner, scheduler) = match slot.as_ref() {
+            Some((d, r, s, _)) if *d == dir => (Arc::clone(r), Arc::clone(s)),
+            _ => {
+                let (store, errors) = WorkflowStore::open(dir.clone());
+                self.workflow_errors(&errors);
+                let runner = Runner::new(Arc::clone(&store), self.workflow_hooks());
+                let me = Arc::downgrade(self);
+                let scheduler = Arc::new(Scheduler::spawn(
+                    &store,
+                    Arc::new(move |t: &rukes_plugins::workflows::Trigger| {
+                        if let Some(h) = me.upgrade() {
+                            h.run_target(&t.target);
+                        }
+                    }),
+                    !config.workflows.triggers,
+                ));
+                let (weak, me, sched) = (
+                    Arc::downgrade(&store),
+                    Arc::downgrade(self),
+                    Arc::downgrade(&scheduler),
+                );
+                let watcher = DirWatcher::spawn(&dir, move || {
+                    if let (Some(s), Some(h)) = (weak.upgrade(), me.upgrade()) {
+                        h.workflow_errors(&s.reload());
+                        if let Some(sc) = sched.upgrade() {
+                            sc.reload();
+                        }
+                        h.refresh_hotkeys();
+                    }
+                })
+                .map_err(|e| tracing::warn!(%e, "no se pudo vigilar la carpeta de workflows"))
+                .ok();
+                *slot = Some((dir, Arc::clone(&runner), Arc::clone(&scheduler), watcher));
+                (runner, scheduler)
+            }
+        };
+        scheduler.set_paused(!config.workflows.triggers);
+        plugins.push(Arc::new(WorkflowsPlugin {
+            runner,
+            scheduler: Some(scheduler),
+        }));
+    }
+
+    fn workflow_hooks(self: &Arc<Self>) -> WorkflowHooks {
+        let (a, b, c) = (
+            Arc::downgrade(self),
+            Arc::downgrade(self),
+            Arc::downgrade(self),
+        );
+        WorkflowHooks {
+            run_script: Arc::new(move |name: &str, args: &[String]| {
+                let h = a
+                    .upgrade()
+                    .ok_or_else(|| "Rukes se está cerrando".to_owned())?;
+                let p = h
+                    .scripts_plugin
+                    .lock()
+                    .ok()
+                    .and_then(|p| p.clone())
+                    .ok_or_else(|| tr("workflows.scripts_off").to_owned())?;
+                p.run_named(name, args)
+            }),
+            set_theme: Arc::new(move |name: &str| {
+                b.upgrade()
+                    .ok_or_else(|| "Rukes se está cerrando".to_owned())?
+                    .set_theme(name)
+            }),
+            notify: Arc::new(move |title: &str, body: &str, error: bool| {
+                if let Some(h) = c.upgrade() {
+                    h.system_notify(title, body, error);
+                }
+            }),
+        }
+    }
+
+    fn workflow_errors(&self, errors: &[String]) {
+        for e in errors {
+            tracing::warn!(error = %e, "workflow no válido");
+        }
+        if let Some(e) = errors.first() {
+            self.notice(format!("{}: {e}", tr("error.workflows")));
+        }
+    }
+
+    /// Cambia el tema hasta reiniciar o hasta que cambie la configuración (paso `theme`).
+    fn set_theme(&self, name: &str) -> Result<(), String> {
+        rukes_config::theme::load(name, &self.paths.themes_dir()).map_err(|e| e.to_string())?;
+        self.inner().config.general.theme = name.to_owned();
+        self.refresh_look(true);
+        Ok(())
+    }
+
+    /// Ejecuta lo que pide un trigger o un atajo propio.
+    fn run_target(self: &Arc<Self>, target: &Target) {
+        let runner = self
+            .workflows
+            .lock()
+            .ok()
+            .and_then(|w| w.as_ref().map(|(_, r, _, _)| Arc::clone(r)));
+        let script = |name: &str| -> Result<(), String> {
+            let p = self
+                .scripts_plugin
+                .lock()
+                .ok()
+                .and_then(|p| p.clone())
+                .ok_or_else(|| tr("workflows.scripts_off").to_owned())?;
+            p.run_named(name, &[])
+        };
+        let result = match target {
+            Target::Workflow(name) => match runner.as_ref().and_then(|r| r.store().find(name)) {
+                Some(wf) => {
+                    let name = wf.name.clone();
+                    if runner.as_ref().is_some_and(|r| r.start(wf)) {
+                        Ok(())
+                    } else {
+                        Err(format!("{name}: {}", tr("workflows.already_running")))
+                    }
+                }
+                // Un nombre suelto puede ser un script.
+                None => {
+                    script(name).map_err(|_| trf("workflows.target_not_found", &[("name", name)]))
+                }
+            },
+            Target::Script(name) => script(name),
+        };
+        if let Err(e) = result {
+            tracing::warn!(?target, error = %e, "no se pudo ejecutar");
+            self.system_notify("Rukes", &e, true);
+        }
+    }
+
+    /// Registra los atajos propios de scripts y workflows (RF-162). Se liberan en pausa.
+    fn refresh_hotkeys(self: &Arc<Self>) {
+        let mut wanted: Vec<(String, Target, String)> = Vec::new();
+        if let Some((_, r, _, _)) = self
+            .workflows
+            .lock()
+            .ok()
+            .as_deref()
+            .and_then(Option::as_ref)
+        {
+            for w in r.store().workflows() {
+                if let Some(h) = &w.hotkey {
+                    wanted.push((h.clone(), Target::Workflow(w.id.clone()), w.name.clone()));
+                }
+            }
+        }
+        if let Some(p) = self.scripts_plugin.lock().ok().and_then(|p| p.clone()) {
+            for (h, name) in p.hotkeys() {
+                wanted.push((h, Target::Script(name.clone()), name));
+            }
+        }
+        if self.paused.load(Ordering::SeqCst) {
+            wanted.clear();
+        }
+        let mut set = self.extra_hotkeys.lock().unwrap_or_else(|p| p.into_inner());
+        if set.is_none() && wanted.is_empty() {
+            return;
+        }
+        if set.is_none() {
+            let targets = Arc::clone(&self.hotkey_targets);
+            let me = Arc::downgrade(self);
+            match HotkeySet::spawn(move |i| {
+                let t = targets.lock().ok().and_then(|t| t.get(i).cloned());
+                if let (Some(t), Some(h)) = (t, me.upgrade()) {
+                    tracing::info!(target = ?t, "atajo propio");
+                    h.run_target(&t);
+                }
+            }) {
+                Ok(s) => *set = Some(s),
+                Err(e) => {
+                    tracing::error!(%e, "no se pudo crear el hilo de atajos propios");
+                    return;
+                }
+            }
+        }
+        let main = Hotkey::parse(&self.inner().config.general.hotkey).ok();
+        let mut errors = Vec::new();
+        let mut vks = Vec::new();
+        let mut targets = Vec::new();
+        for (text, target, name) in wanted {
+            let parsed = Hotkey::parse(&text)
+                .map_err(|e| e.to_string())
+                .and_then(|h| {
+                    if Some(&h) == main.as_ref() {
+                        return Err(tr("error.hotkey_main").to_owned());
+                    }
+                    hotkey::to_vk(h.mods.ctrl, h.mods.alt, h.mods.shift, h.mods.win, &h.key)
+                        .map_err(|e| e.to_string())
+                });
+            match parsed {
+                Ok(vk) if !vks.contains(&vk) => {
+                    vks.push(vk);
+                    targets.push((target, name, text));
+                }
+                Ok(_) => errors.push(format!("{name} «{text}»: {}", tr("error.hotkey_repeated"))),
+                Err(e) => errors.push(format!("{name} «{text}»: {e}")),
+            }
+        }
+        *self
+            .hotkey_targets
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) =
+            targets.iter().map(|(t, _, _)| t.clone()).collect();
+        if let Some(s) = set.as_ref() {
+            match s.set_all(vks) {
+                Ok(results) => {
+                    for (r, (_, name, text)) in results.into_iter().zip(&targets) {
+                        match r {
+                            Ok(()) => {
+                                tracing::info!(hotkey = %text, %name, "atajo propio registrado")
+                            }
+                            Err(e) => errors.push(format!("{name} «{text}»: {e}")),
+                        }
+                    }
+                }
+                Err(e) => errors.push(e.to_string()),
+            }
+        }
+        drop(set);
+        for e in &errors {
+            tracing::warn!(error = %e, "atajo propio no registrado");
+        }
+        if let Some(e) = errors.first() {
+            self.notice(format!("{}: {e}", tr("error.hotkey")));
+        }
     }
 
     /// Portapapeles, snippets, notas, tareas y recordatorios (secciones 5.10 a 5.12).
@@ -457,12 +721,16 @@ impl AppHost {
                 Some((d, i, c)) if *d == dir && *i == settings.interpreters => Arc::clone(c),
                 _ => {
                     let engine = Arc::downgrade(&self.engine);
+                    let me = Arc::downgrade(self);
                     let c = Catalog::open(
                         dir.clone(),
                         settings.interpreters.clone(),
                         Arc::new(move || {
                             if let Some(e) = engine.upgrade() {
                                 e.reload_metadata();
+                            }
+                            if let Some(h) = me.upgrade() {
+                                h.refresh_hotkeys();
                             }
                         }),
                     );
@@ -500,7 +768,12 @@ impl AppHost {
             }),
             context: Arc::new(move || c.upgrade().map(|h| h.context()).unwrap_or_default()),
         };
-        Scripts(Arc::new(ScriptsPlugin::new(catalog, runs, settings, hooks)))
+        let plugin = Arc::new(ScriptsPlugin::new(catalog, runs, settings, hooks));
+        *self
+            .scripts_plugin
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(Arc::clone(&plugin));
+        Scripts(plugin)
     }
 
     /// Notificación del sistema desde el icono de la bandeja.
@@ -669,7 +942,10 @@ impl AppHost {
         self.engine.set_config(settings::engine(&config));
         let old = std::mem::replace(&mut self.inner().config, config.clone());
         self.refresh_look(true);
-        if old.plugins != config.plugins || old.scripts != config.scripts {
+        if old.plugins != config.plugins
+            || old.scripts != config.scripts
+            || old.workflows != config.workflows
+        {
             let me = self.me.lock().ok().and_then(|w| w.upgrade());
             if let Some(me) = me {
                 me.install_plugins(&config);
@@ -702,7 +978,8 @@ impl AppHost {
                 };
                 let paused = h.paused.load(Ordering::SeqCst);
                 let hotkey = h.inner().config.general.hotkey.clone();
-                vec![
+                let triggers = h.triggers_paused();
+                let mut menu = vec![
                     MenuEntry::Item(TRAY_SHOW, format!("{} ({hotkey})", tr("tray.show"))),
                     MenuEntry::Item(TRAY_SETTINGS, tr("tray.settings").to_owned()),
                     MenuEntry::Item(TRAY_RELOAD, tr("tray.reload").to_owned()),
@@ -710,9 +987,21 @@ impl AppHost {
                         TRAY_PAUSE,
                         tr(if paused { "tray.resume" } else { "tray.pause" }).to_owned(),
                     ),
-                    MenuEntry::Separator,
-                    MenuEntry::Item(TRAY_QUIT, tr("tray.quit").to_owned()),
-                ]
+                ];
+                if let Some(t) = triggers {
+                    menu.push(MenuEntry::Item(
+                        TRAY_TRIGGERS,
+                        tr(if t {
+                            "tray.resume_triggers"
+                        } else {
+                            "tray.pause_triggers"
+                        })
+                        .to_owned(),
+                    ));
+                }
+                menu.push(MenuEntry::Separator);
+                menu.push(MenuEntry::Item(TRAY_QUIT, tr("tray.quit").to_owned()));
+                menu
             },
             move || {
                 if let Some(h) = click_host.upgrade() {
@@ -757,11 +1046,38 @@ impl AppHost {
             }
             TRAY_PAUSE => self.set_paused(!self.paused.load(Ordering::SeqCst)),
             TRAY_QUIT => self.quit(),
+            TRAY_TRIGGERS => {
+                if let Some(s) = self.scheduler() {
+                    let paused = !s.paused();
+                    s.set_paused(paused);
+                    self.system_notify(
+                        "Rukes",
+                        tr(if paused {
+                            "tray.triggers_paused"
+                        } else {
+                            "tray.triggers_resumed"
+                        }),
+                        false,
+                    );
+                }
+            }
             _ => {}
         }
     }
 
-    /// Pausa: libera el atajo global hasta reanudar.
+    fn scheduler(&self) -> Option<Arc<Scheduler>> {
+        self.workflows
+            .lock()
+            .ok()
+            .and_then(|w| w.as_ref().map(|(_, _, s, _)| Arc::clone(s)))
+    }
+
+    /// `Some(en pausa)` si hay triggers.
+    fn triggers_paused(&self) -> Option<bool> {
+        self.scheduler().map(|s| s.paused())
+    }
+
+    /// Pausa: libera el atajo global (y los propios) hasta reanudar.
     pub fn set_paused(self: &Arc<Self>, paused: bool) {
         self.paused.store(paused, Ordering::SeqCst);
         if paused {
@@ -773,6 +1089,7 @@ impl AppHost {
             let text = self.inner().config.general.hotkey.clone();
             self.start_hotkey(&text);
         }
+        self.refresh_hotkeys();
     }
 
     /// Guarda el estado, quita el icono de la bandeja y termina el proceso.

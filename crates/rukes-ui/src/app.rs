@@ -626,6 +626,8 @@ fn glyph<'a>(l: &Look, name: &str) -> Element<'a, Message> {
         "note" => "md",
         "todo" => "[ ]",
         "remind" => "!t",
+        "workflow" => "wf",
+        "trigger" => "at",
         _ => "·",
     };
     let (bg, radius) = (l.selection, (l.radius - 2.0).max(0.0));

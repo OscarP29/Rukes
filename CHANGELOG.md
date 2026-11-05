@@ -4,6 +4,26 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 6: workflows y automatización
+
+#### Añadido
+- Workflows en archivos `.toml` de la carpeta `workflows` (vigilada; la primera vez se crean
+  los modos de ejemplo Trabajo, Gaming, Presentación y Proyecto X). Pasos: `app`, `url`,
+  `script`, `wait`, `theme`, `power_plan`, `kill` y `notify`.
+- Posición de las ventanas por paso: monitor, `snap` (mitades, cuartos, tercios, centro,
+  completa), coordenadas y tamaño en píxeles o porcentaje, o maximizada. Se espera a que aparezca
+  la ventana nueva y se compensa el borde invisible de Windows 10/11.
+- Cada workflow es un resultado del launcher (nombre y alias) con vista previa de sus pasos
+  (`Ctrl+P`), atajo global propio (`hotkey`) e informe por paso al terminar.
+- Triggers `[[trigger]]`: a una hora (con días de la semana), cada intervalo, al iniciar sesión
+  o al arrancar Rukes; ejecutan un workflow o un script. `triggers` muestra la próxima
+  ejecución. Se pausan desde la bandeja o con `[workflows] triggers = false`.
+- Atajos globales de los scripts (`@rukes.hotkey` en la cabecera).
+- `[workflows]` en la configuración.
+
+#### Pendiente
+- Pasos condicionales (RF-153) y triggers por evento (RF-161), prioridad C.
+
 ### Fase 5: portapapeles, snippets y notas
 
 #### Añadido

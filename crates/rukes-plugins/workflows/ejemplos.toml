@@ -1,0 +1,73 @@
+# Workflows de Rukes. Cada [workflow.<id>] aparece en el launcher por su nombre o sus alias
+# (Ctrl+P muestra los pasos antes de ejecutar). Al guardar se recargan solos.
+#
+# Pasos (uno por línea, se ejecutan en orden):
+#   { app = "code", args = "C:/proyecto", cwd = "...", admin = false, window = { ... } }
+#   { url = "https://...", window = { ... } }
+#   { script = "nombre del script", args = "uno dos" }
+#   { wait = "2s" }
+#   { theme = "nord" }                     tema de Rukes
+#   { power_plan = "high_performance" }    también "balanced", "power_saver" o un GUID
+#   { kill = ["Teams.exe", "OneDrive.exe"] }
+#   { notify = "texto" }
+#
+# window = { monitor = 2, snap = "left" }   1 = principal, luego de izquierda a derecha
+#   snap: left, right, top, bottom, top-left, top-right, bottom-left, bottom-right,
+#         left-third, center-third, right-third, left-two-thirds, right-two-thirds,
+#         center, full, maximize
+#   o bien x, y, width, height en píxeles o "50%"; maximized = true;
+#   title = "texto" para reconocer la ventana si la app ya estaba abierta; wait = "10s".
+#
+# hotkey = "Ctrl+Alt+1" registra un atajo global para el workflow.
+#
+# Triggers: ejecutan un workflow o un script a una hora, cada cierto tiempo o al iniciar sesión.
+# Se pausan desde el icono de la bandeja. Escribe «triggers» en Rukes para ver los próximos.
+#
+#   [[trigger]]
+#   at = "09:00"                 # o every = "30m", o on = "login" / "startup"
+#   days = ["laborables"]        # lun..dom, laborables, finde (opcional)
+#   run = "workflow:trabajo"     # o "script:backup"
+
+[workflow.trabajo]
+name = "Modo trabajo"
+description = "Editor, documentación y terminal, cada uno en su sitio"
+alias = ["work", "trabajo"]
+steps = [
+  { app = "code", window = { monitor = 1, snap = "left", title = "Visual Studio Code" } },
+  { url = "https://docs.rs", window = { monitor = 2, snap = "right" } },
+  { app = "wt.exe", window = { monitor = 1, snap = "right", title = "Terminal" } },
+  { notify = "Modo trabajo listo" },
+]
+
+[workflow.gaming]
+name = "Modo gaming"
+description = "Plan de alto rendimiento y avisos fuera"
+alias = ["gaming", "jugar"]
+steps = [
+  { power_plan = "high_performance" },
+  # { kill = ["Teams.exe", "OneDrive.exe"] },
+  { notify = "Plan de energía: alto rendimiento" },
+]
+
+[workflow.presentacion]
+name = "Modo presentación"
+description = "Tema claro y plan equilibrado"
+alias = ["presentacion", "present"]
+steps = [
+  { theme = "rukes-light" },
+  { power_plan = "balanced" },
+  { notify = "Listo para presentar" },
+]
+
+[workflow.proyecto_x]
+name = "Proyecto X"
+description = "Abre la carpeta del proyecto en el Explorador"
+alias = ["px"]
+steps = [
+  { app = "explorer.exe", args = "%USERPROFILE%", window = { monitor = 1, snap = "center" } },
+]
+
+# [[trigger]]
+# at = "09:00"
+# days = ["laborables"]
+# run = "workflow:trabajo"

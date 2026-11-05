@@ -13,6 +13,7 @@ pub mod snippets;
 pub mod util;
 pub mod web;
 pub mod windows;
+pub mod workflows;
 
 pub use apps::AppsPlugin;
 pub use calc::CalcPlugin;
@@ -25,3 +26,4 @@ pub use shell::{ShellPlugin, ShellSettings, SystemCommandsPlugin};
 pub use snippets::{SnippetStore, SnippetsPlugin};
 pub use web::WebPlugin;
 pub use windows::WindowsPlugin;
+pub use workflows::{Runner, Scheduler, WorkflowStore, WorkflowsPlugin};

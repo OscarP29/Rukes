@@ -827,6 +827,74 @@ impl ScriptsPlugin {
         }
     }
 
+    /// Busca un script por nombre, alias o nombre de archivo (sin distinguir mayúsculas).
+    pub fn find(&self, name: &str) -> Option<Arc<Script>> {
+        let n = fold(name.trim());
+        self.catalog.scripts().iter().find_map(|s| {
+            let file = s
+                .path
+                .file_name()
+                .map(|f| fold(&f.to_string_lossy()))
+                .unwrap_or_default();
+            let stem = s
+                .path
+                .file_stem()
+                .map(|f| fold(&f.to_string_lossy()))
+                .unwrap_or_default();
+            (fold(&s.meta.name) == n
+                || s.meta.aliases.iter().any(|a| fold(a) == n)
+                || file == n
+                || stem == n)
+                .then(|| Arc::clone(s))
+        })
+    }
+
+    /// Ejecuta un script en segundo plano desde un workflow, un trigger o un atajo (RF-150,
+    /// RF-160, RF-162). Los argumentos se interpretan como si se escribieran tras el alias.
+    pub fn run_named(self: &Arc<Self>, name: &str, args: &[String]) -> Result<(), String> {
+        let script = self
+            .find(name)
+            .ok_or_else(|| trf("scripts.not_found", &[("name", &name)]))?;
+        let line = args
+            .iter()
+            .map(|a| {
+                if a.contains(char::is_whitespace) {
+                    format!("\"{a}\"")
+                } else {
+                    a.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        let parsed = crate::args::parse(&script.meta.args, &line);
+        if let Some(e) = parsed.error {
+            return Err(e);
+        }
+        if !parsed.missing.is_empty() {
+            return Err(trf(
+                "scripts.missing_args",
+                &[("args", &parsed.missing.join(", "))],
+            ));
+        }
+        let query = format!("{} {line}", script.meta.name);
+        self.start(script, parsed.values, query.trim().to_owned(), false);
+        Ok(())
+    }
+
+    /// Atajos globales declarados en las cabeceras: `(atajo, nombre del script)`.
+    pub fn hotkeys(&self) -> Vec<(String, String)> {
+        self.catalog
+            .scripts()
+            .iter()
+            .filter_map(|s| {
+                s.meta
+                    .hotkey
+                    .as_ref()
+                    .map(|h| (h.clone(), s.meta.name.clone()))
+            })
+            .collect()
+    }
+
     fn run_filter(&self, s: &Script, input: &str, cancel: &CancelToken) -> Vec<ResultItem> {
         let end = Instant::now() + FILTER_DEBOUNCE;
         while Instant::now() < end {

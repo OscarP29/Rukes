@@ -18,6 +18,30 @@ pub struct Config {
     pub plugins: Plugins,
     /// Scripts del usuario (sección 5.13).
     pub scripts: Scripts,
+    /// Workflows y triggers (secciones 5.14 y 5.15).
+    pub workflows: Workflows,
+}
+
+/// `[workflows]`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Workflows {
+    /// Activo.
+    pub enabled: bool,
+    /// Carpeta. Vacío = `workflows` dentro de la configuración. Admite `~` y `%VAR%`.
+    pub dir: String,
+    /// Ejecutar los triggers programados (RF-160). También se pausan desde la bandeja.
+    pub triggers: bool,
+}
+
+impl Default for Workflows {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            dir: String::new(),
+            triggers: true,
+        }
+    }
 }
 
 /// `[scripts]`

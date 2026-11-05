@@ -105,6 +105,11 @@ pub fn snippets_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path
     path_or(&c.plugins.snippets.dir, paths.snippets_dir())
 }
 
+/// Carpeta de workflows (sección 5.14).
+pub fn workflows_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path::PathBuf {
+    path_or(&c.workflows.dir, paths.workflows_dir())
+}
+
 /// Archivos de notas y de tareas (RF-120, RF-121).
 pub fn notes_files(
     c: &Config,

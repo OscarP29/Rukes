@@ -18,6 +18,7 @@ pub mod icons;
 pub mod input;
 pub mod instance;
 pub mod job;
+pub mod monitor;
 pub mod power;
 pub mod process;
 pub mod shell;

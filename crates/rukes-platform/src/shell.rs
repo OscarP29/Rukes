@@ -2,13 +2,15 @@
 
 use std::path::{Path, PathBuf};
 
+use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, CoCreateInstance, IPersistFile, STGM_READ,
 };
+use windows::Win32::System::Threading::GetProcessId;
 use windows::Win32::UI::Shell::{
     FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, IShellLinkW,
-    SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, SHFILEOPSTRUCTW, SHFileOperationW,
-    ShellExecuteExW, ShellLink,
+    SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    SHFILEOPSTRUCTW, SHFileOperationW, ShellExecuteExW, ShellLink,
 };
 use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNORMAL};
 use windows::core::{Interface, PCWSTR, w};
@@ -37,13 +39,32 @@ pub fn launch_with(
     verb: Verb,
     visible: bool,
 ) -> Result<()> {
+    exec(target, args, cwd, verb, visible, false).map(|_| ())
+}
+
+/// Como [`launch`], pero devuelve el PID del proceso creado, si ShellExecute creó uno (al abrir
+/// una URL en un navegador ya abierto, o un documento, puede no haberlo).
+pub fn launch_pid(target: &str, args: Option<&str>, cwd: Option<&Path>) -> Result<Option<u32>> {
+    exec(target, args, cwd, Verb::Open, true, true)
+}
+
+fn exec(
+    target: &str,
+    args: Option<&str>,
+    cwd: Option<&Path>,
+    verb: Verb,
+    visible: bool,
+    want_pid: bool,
+) -> Result<Option<u32>> {
     crate::com::ensure_thread();
     let file = wide(target);
     let params = args.map(wide);
     let dir = cwd.map(|d| wide(&d.to_string_lossy()));
     let mut info = SHELLEXECUTEINFOW {
         cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
-        fMask: SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI,
+        fMask: SEE_MASK_NOASYNC
+            | SEE_MASK_FLAG_NO_UI
+            | if want_pid { SEE_MASK_NOCLOSEPROCESS } else { 0 },
         lpVerb: match verb {
             Verb::Open => w!("open"),
             Verb::RunAs => w!("runas"),
@@ -57,7 +78,17 @@ pub fn launch_with(
         ..Default::default()
     };
     // SAFETY: todos los punteros de `info` apuntan a buffers locales vivos durante la llamada.
-    unsafe { ShellExecuteExW(&mut info) }.ctx("ShellExecuteExW")
+    unsafe { ShellExecuteExW(&mut info) }.ctx("ShellExecuteExW")?;
+    if info.hProcess.is_invalid() {
+        return Ok(None);
+    }
+    // SAFETY: handle devuelto por ShellExecuteExW con SEE_MASK_NOCLOSEPROCESS; se cierra aquí.
+    let pid = unsafe {
+        let pid = GetProcessId(info.hProcess);
+        let _ = CloseHandle(info.hProcess);
+        pid
+    };
+    Ok((pid != 0).then_some(pid))
 }
 
 /// Mueve un archivo o carpeta a la papelera de reciclaje, sin diálogos.
