@@ -31,6 +31,8 @@ pub fn ui(c: &Config, style: UiStyle, animations: bool, scale: f32) -> UiConfig 
         preview_width: (c.window.preview_width.clamp(200, 900) as f32 * scale).round(),
         anchor_bottom: c.window.position == WindowPosition::BottomCenter,
         hints: c.window.hints,
+        hints_count: c.window.hints_count,
+        hints_items: c.window.hints_items.clone(),
     }
 }
 

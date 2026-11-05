@@ -40,6 +40,11 @@ preview_panel = false
 preview_width = 340
 # Con la búsqueda vacía, mostrar una leyenda con los comandos más útiles (clic para usarlos).
 hints = true
+# Cuántos comandos muestra la leyenda.
+hints_count = 8
+# Cuáles y en qué orden: calc, files, web, shell, clip, snip, note, todo, remind, controls,
+# windows, wall, workflows, http, new, help. Vacío = los de siempre.
+hints_items = []
 
 [search]
 # Peso del uso frecuente/reciente frente a la coincidencia de texto (0 a 1).

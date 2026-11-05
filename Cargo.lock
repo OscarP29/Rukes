@@ -2274,6 +2274,7 @@ dependencies = [
  "rukes-plugins",
  "rukes-script",
  "rukes-ui",
+ "serde_json",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

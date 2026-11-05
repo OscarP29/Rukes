@@ -382,6 +382,22 @@ impl AppHost {
                 .lock()
                 .unwrap_or_else(|p| p.into_inner()) = None;
         }
+        plugins.push(Arc::new(crate::create_plugin::CreatePlugin {
+            themes_dir: self.paths.themes_dir(),
+            workflows_dir: config
+                .workflows
+                .enabled
+                .then(|| settings::workflows_dir(config, &self.paths)),
+            plugins_dir: config
+                .plugins
+                .external
+                .enabled
+                .then(|| settings::plugins_dir(config, &self.paths)),
+            scripts: config.scripts.enabled,
+            config_file: self.paths.config_file(),
+            editor: config.scripts.editor.clone(),
+            current_theme: look::theme_name(config, &System::read()).to_owned(),
+        }));
         let quit_host = Arc::downgrade(self);
         let reload_engine = Arc::clone(&self.engine);
         plugins.push(Arc::new(SystemPlugin {

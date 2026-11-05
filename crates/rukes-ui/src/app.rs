@@ -217,6 +217,11 @@ impl State {
         }
     }
 
+    /// Ejemplos de la leyenda según la configuración.
+    fn hint_list(&self) -> Vec<&'static hints::Hint> {
+        hints::selected(&self.cfg.hints_items, self.cfg.hints_count)
+    }
+
     /// Leyenda de comandos visible: búsqueda vacía y sin resultados.
     fn hints_visible(&self) -> bool {
         self.cfg.hints
@@ -245,7 +250,7 @@ impl State {
         if rows > 0 {
             h += 1.0 + rows as f32 * self.look.row_h + theme::LIST_PAD * 2.0;
         } else if self.hints_visible() {
-            h += 1.0 + hints::height();
+            h += 1.0 + hints::height(self.hint_list().len());
         }
         if self.notice.is_some() {
             h += theme::NOTICE_H;
@@ -856,6 +861,7 @@ fn glyph<'a>(l: &Look, name: &str) -> Element<'a, Message> {
         "workflow" => "wf",
         "trigger" => "at",
         "plugin" => "{}",
+        "theme" => "Aa",
         "wall" => "[#]",
         "help" => "?",
         "http" => "</>",
@@ -1262,7 +1268,7 @@ fn view(s: &State) -> Element<'_, Message> {
     let rows = s.visible_rows();
     if rows == 0 && s.hints_visible() {
         parts.push(divider(l.divider, false));
-        parts.push(hints::view(&l));
+        parts.push(hints::view(&l, &s.hint_list()));
     }
     if rows > 0 {
         parts.push(divider(l.divider, false));

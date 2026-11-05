@@ -14,6 +14,8 @@ pub enum EditValue {
     Int(i64),
     /// Texto.
     Text(String),
+    /// Lista de textos.
+    List(Vec<String>),
 }
 
 impl EditValue {
@@ -22,6 +24,7 @@ impl EditValue {
             Self::Bool(b) => Value::from(*b),
             Self::Int(i) => Value::from(*i),
             Self::Text(t) => Value::from(t.as_str()),
+            Self::List(l) => Value::Array(l.iter().map(String::as_str).collect()),
         }
     }
 }
@@ -108,6 +111,10 @@ mod tests {
                 ("general.theme".into(), EditValue::Text("midnight".into())),
                 ("window.hints".into(), EditValue::Bool(false)),
                 ("window.width".into(), EditValue::Int(720)),
+                (
+                    "window.hints_items".into(),
+                    EditValue::List(vec!["calc".into(), "new".into()]),
+                ),
                 ("plugins.calc.currency_online".into(), EditValue::Bool(true)),
             ],
         )
@@ -116,12 +123,14 @@ mod tests {
         assert!(out.contains("theme = \"midnight\" # el mío"), "{out}");
         assert!(out.contains("width = 720"));
         assert!(out.contains("hints = false"));
+        assert!(out.contains(r#"hints_items = ["calc", "new"]"#), "{out}");
         assert!(
             out.contains("[plugins.calc]\ncurrency_online = true"),
             "{out}"
         );
         let c = crate::parse(&out, Path::new("c.toml")).unwrap();
         assert_eq!(c.general.theme, "midnight");
+        assert_eq!(c.window.hints_items, ["calc", "new"]);
         assert!(c.plugins.calc.currency_online);
     }
 

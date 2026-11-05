@@ -55,9 +55,10 @@ Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/relea
 | `uuid`, `pass 24`, `sha256 texto`, `b64 texto` | Generadores, hashes y codificadores (Enter copia) |
 | `gh issue Mi bug`, `hola Ana` | Tus scripts, con argumentos en línea |
 | `new script Backup`, `logs` | Crear un script desde una plantilla, historial de ejecuciones |
+| `nuevo`, `nuevo tema Mi tema`, `nuevo plugin Mi bot` | Crear un tema, workflow, script o plugin: pregunta el nombre y el lenguaje y abre el archivo |
 | `clip`, `clip factura` | Historial del portapapeles: Enter pega en la ventana anterior |
 | `firma Ana`, `snip` | Snippets con variables y campos (`{fecha}`, `{cursor}`, `{campo:Nombre}`) |
-| `note idea`, `todo comprar pan`, `todo` | Notas y tareas en Markdown (Enter completa una tarea) |
+| `note idea`, `todo comprar pan`, `todo` | Notas y tareas en Markdown (Enter completa una tarea, Ctrl+D borra una nota) |
 | `remind 15m llamar a Ana`, `recordar 14:30 reunión` | Recordatorios con notificación |
 | `modo trabajo`, `workflows`, `triggers` | Workflows (apps y webs colocadas en tus monitores) y triggers programados |
 | `wall`, `wall random` | Fondos de pantalla con miniaturas y previsualización; cambio automático opcional |

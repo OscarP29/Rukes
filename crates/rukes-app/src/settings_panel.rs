@@ -90,6 +90,7 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
 
     let g = &c.general;
     let w = &c.window;
+    let hint_options = rukes_ui::hint_options();
     let p = &c.plugins;
     let general = SettingsSection {
         title: tr("settings.tab_general").into(),
@@ -183,6 +184,23 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 "settings.hints_help",
                 w.hints,
             ),
+            number(
+                "window.hints_count",
+                "settings.hints_count",
+                (1, i64::try_from(hint_options.len()).unwrap_or(16), 1),
+                i64::try_from(w.hints_count).unwrap_or(8),
+            ),
+            SettingField {
+                key: "window.hints_items".into(),
+                label: tr("settings.hints_items").into(),
+                help: tr("settings.hints_items_help").into(),
+                value: SettingValue::List(if w.hints_items.is_empty() {
+                    hint_options.iter().map(|(id, _)| id.clone()).collect()
+                } else {
+                    w.hints_items.clone()
+                }),
+                kind: SettingKind::Multi(hint_options),
+            },
             choice(
                 "window.on_show",
                 "settings.on_show",
@@ -341,6 +359,7 @@ pub fn edits(changes: &[(String, SettingValue)]) -> Result<Vec<(String, EditValu
             let value = match v {
                 SettingValue::Bool(b) => EditValue::Bool(*b),
                 SettingValue::Int(i) => EditValue::Int(*i),
+                SettingValue::List(l) => EditValue::List(l.clone()),
                 SettingValue::Text(t) => {
                     let t = t.trim();
                     if key == "general.hotkey" {
@@ -363,6 +382,8 @@ mod tests {
     fn form_reflects_the_config_and_every_key_exists() {
         let mut c = Config::default();
         c.window.position = WindowPosition::BottomCenter;
+        c.window.hints_items = vec!["new".into(), "calc".into()];
+        c.window.hints_count = 5;
         let themes = rukes_config::theme::available(std::path::Path::new("no-existe"));
         let f = form(&c, &themes);
         assert_eq!(f.sections.len(), 4);
@@ -386,6 +407,18 @@ mod tests {
         };
         assert!(o.iter().any(|(v, _)| v == "system"));
         assert!(o.iter().any(|(v, _)| v == "midnight"));
+        // Sin elegir ninguno, la leyenda marca todos.
+        let f = form(&Config::default(), &themes);
+        let items = f
+            .sections
+            .iter()
+            .flat_map(|s| &s.fields)
+            .find(|x| x.key == "window.hints_items")
+            .unwrap();
+        let SettingValue::List(l) = &items.value else {
+            panic!("no es una lista");
+        };
+        assert_eq!(l.len(), rukes_ui::hint_options().len());
     }
 
     #[test]

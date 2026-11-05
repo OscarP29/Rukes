@@ -5,7 +5,8 @@
 use std::fmt;
 
 use iced::widget::{
-    button, column, container, pick_list, row, scrollable, slider, space, text, text_input, toggler,
+    button, checkbox, column, container, pick_list, row, scrollable, slider, space, text,
+    text_input, toggler,
 };
 use iced::{Background, Border, Color, Element, Font, Length};
 use rukes_core::i18n::tr;
@@ -23,6 +24,8 @@ pub fn icon_font() -> Font {
 pub const ICON_SETTINGS: &str = "\u{E713}";
 /// Cerrar.
 pub const ICON_CLOSE: &str = "\u{E711}";
+/// Añadir.
+pub const ICON_ADD: &str = "\u{E710}";
 
 /// Alto del cuerpo del panel (las pestañas y los ajustes).
 const BODY_H: f32 = 380.0;
@@ -187,8 +190,68 @@ fn control<'a>(
             .size(l.small())
             .padding([5, 8])
             .into(),
+        (SettingKind::Multi(options), SettingValue::List(current)) => {
+            multi(l, s, f, options, current)
+        }
         _ => space().into(),
     }
+}
+
+/// `current` con `value` marcado o desmarcado, en el orden de `options`.
+pub fn toggle_in(
+    options: &[(String, String)],
+    current: &[String],
+    value: &str,
+    on: bool,
+) -> Vec<String> {
+    options
+        .iter()
+        .map(|(v, _)| v)
+        .filter(|v| {
+            if v.as_str() == value {
+                on
+            } else {
+                current.contains(v)
+            }
+        })
+        .cloned()
+        .collect()
+}
+
+/// Casillas en dos columnas.
+fn multi<'a>(
+    l: &Look,
+    s: usize,
+    f: usize,
+    options: &'a [(String, String)],
+    current: &'a [String],
+) -> Element<'a, Message> {
+    let mut grid = column![].spacing(6);
+    for pair in options.chunks(2) {
+        let mut r = row![].spacing(12);
+        for (value, label) in pair {
+            let checked = current.contains(value);
+            r = r.push(
+                checkbox(checked)
+                    .label(label.as_str())
+                    .size(16)
+                    .text_size(l.small())
+                    .on_toggle(move |on| {
+                        Message::PanelSet(
+                            s,
+                            f,
+                            SettingValue::List(toggle_in(options, current, value, on)),
+                        )
+                    })
+                    .width(Length::FillPortion(1)),
+            );
+        }
+        if pair.len() < 2 {
+            r = r.push(space().width(Length::FillPortion(1)));
+        }
+        grid = grid.push(r);
+    }
+    grid.into()
 }
 
 /// Vista del panel.
@@ -268,6 +331,12 @@ pub fn view<'a>(p: &'a Panel, l: &Look, header_h: f32) -> Element<'a, Message> {
                 .width(Length::Fill);
             if !field.help.is_empty() {
                 label = label.push(text(field.help.as_str()).size(l.small() - 1.0).color(muted));
+            }
+            // Las casillas ocupan todo el ancho, debajo del nombre.
+            if matches!(field.kind, SettingKind::Multi(_)) {
+                fields = fields
+                    .push(column![label, control(l, p.tab, f, &field.kind, value)].spacing(8));
+                continue;
             }
             fields = fields.push(
                 row![
@@ -385,5 +454,20 @@ mod tests {
         );
         p.set(0, 1, SettingValue::Int(680));
         assert!(p.changes().is_empty());
+    }
+
+    #[test]
+    fn multi_keeps_the_order_of_the_options() {
+        let o: Vec<(String, String)> = ["a", "b", "c"]
+            .iter()
+            .map(|v| ((*v).to_owned(), v.to_uppercase()))
+            .collect();
+        let cur = vec!["c".to_owned()];
+        assert_eq!(toggle_in(&o, &cur, "a", true), ["a", "c"]);
+        assert!(toggle_in(&o, &cur, "c", false).is_empty());
+        assert_eq!(
+            toggle_in(&o, &["a".into(), "b".into()], "b", true),
+            ["a", "b"]
+        );
     }
 }

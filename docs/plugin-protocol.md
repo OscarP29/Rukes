@@ -9,6 +9,11 @@ Ejemplos completos: [`plugins-examples/cuenta`](../plugins-examples/cuenta) (Pyt
 
 ## Instalación
 
+Lo más rápido: escribe `nuevo plugin Mi plugin` en Rukes y elige el lenguaje (Python, Node.js
+o PowerShell). Rukes crea la carpeta con un `plugin.toml` y un programa de ejemplo que ya
+funciona y lo abre en el editor.
+
+
 Cada plugin vive en su carpeta, dentro de la carpeta de plugins:
 
 ```
@@ -195,6 +200,7 @@ Algunos plugins integrados ofrecen comandos sin interfaz para que otros los usen
 | --- | --- | --- |
 | `notes` | `add` | `{text}` → `{text, file}` |
 | `notes` | `list` | `{limit: 10}` → `["texto", …]` |
+| `notes` | `delete` | `{text}` (como lo da `list`) → `true` si existía |
 | `todo` | `add` | `{text}` → `{text, file}` |
 | `todo` | `list` | → `[{line, text}, …]` |
 | `todo` | `complete` | `{text}` → `true` si existía |

@@ -131,6 +131,22 @@ impl NotesPlugin {
             .map(str::to_owned)
             .collect()
     }
+
+    /// Borra la nota `text` (tal como la da [`Self::recent`]); si hay varias iguales, la más
+    /// reciente. Devuelve si existía.
+    pub fn delete(&self, text: &str) -> std::io::Result<bool> {
+        let content = std::fs::read_to_string(&self.file)?;
+        let mut lines: Vec<&str> = content.split('\n').collect();
+        let Some(idx) = lines
+            .iter()
+            .rposition(|l| bullet(l.trim_end_matches('\r'), "") == Some(text))
+        else {
+            return Ok(false);
+        };
+        lines.remove(idx);
+        std::fs::write(&self.file, lines.join("\n"))?;
+        Ok(true)
+    }
 }
 
 impl Plugin for NotesPlugin {
@@ -160,8 +176,12 @@ impl Plugin for NotesPlugin {
                 it.subtitle = tr("notes.recent").into();
                 it.icon = Icon::Named("note".into());
                 it.fuzzy = 0.9 - i as f32 * 0.01;
+                it.payload = json!({ "text": n, "raw": q.raw }).to_string();
                 it.detail = Some(n);
-                it.actions = vec![Action::new(ActionId::OPEN, tr("notes.open"))];
+                it.actions = vec![
+                    Action::new(ActionId::OPEN, tr("notes.open")),
+                    Action::new(ActionId::DELETE, tr("notes.delete")),
+                ];
                 out.push(it);
             }
         } else {
@@ -185,6 +205,20 @@ impl Plugin for NotesPlugin {
             self.add(&item.payload).map_err(failed)?;
             return Ok(ActionOutcome::Hide);
         }
+        if action == ActionId::DELETE {
+            let p: Value = serde_json::from_str(&item.payload)
+                .map_err(|_| PluginError::UnsupportedAction(action.into()))?;
+            if !self
+                .delete(p["text"].as_str().unwrap_or_default())
+                .map_err(failed)?
+            {
+                return Err(PluginError::Failed(tr("notes.gone").into()));
+            }
+            // Se vuelve a mostrar la lista, ya sin ella.
+            return Ok(ActionOutcome::ReplaceQuery(
+                p["raw"].as_str().unwrap_or_default().to_owned(),
+            ));
+        }
         open_file(&self.file)
     }
 
@@ -194,6 +228,10 @@ impl Plugin for NotesPlugin {
             PluginCommand::new(
                 "list",
                 "Últimas notas, la más reciente primero. #{limit: 10} → [texto]",
+            ),
+            PluginCommand::new(
+                "delete",
+                "Borra la nota con ese texto (tal como la da list). #{text} → true si existía",
             ),
         ]
     }
@@ -206,6 +244,7 @@ impl Plugin for NotesPlugin {
                 Ok(json!({ "text": text, "file": self.file.display().to_string() }))
             }
             "list" => Ok(json!(self.recent(usize_arg(args, "limit", 10)))),
+            "delete" => Ok(json!(self.delete(text_arg(args, "text")?).map_err(failed)?)),
             other => Err(PluginError::UnknownCommand(other.into())),
         }
     }
@@ -882,6 +921,53 @@ mod tests {
             ActionOutcome::ReplaceQuery(r) if r == "todo "
         ));
         assert!(todo.pending().is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ctrl_d_deletes_a_note() {
+        let _ = rukes_core::i18n::set_language("es", "");
+        let dir = tmp("del");
+        let notes = NotesPlugin {
+            file: dir.join("n.md"),
+        };
+        notes.add("primera").unwrap();
+        notes.add("segunda").unwrap();
+        notes.add("tercera").unwrap();
+        // Con saltos de línea de Windows también.
+        let crlf = std::fs::read_to_string(&notes.file)
+            .unwrap()
+            .replace('\n', "\r\n");
+        std::fs::write(&notes.file, crlf).unwrap();
+        let q = Query {
+            id: rukes_core::QueryId(1),
+            raw: "note ".into(),
+            text: String::new(),
+            targeted: true,
+        };
+        let mut got = Vec::new();
+        notes.query(&q, &CancelToken::default(), &mut |v| got = v);
+        let second = got.iter().find(|i| i.title.ends_with("segunda")).unwrap();
+        assert!(
+            second
+                .actions
+                .iter()
+                .any(|a| a.id.as_str() == ActionId::DELETE)
+        );
+        assert!(matches!(
+            notes.execute(second, ActionId::DELETE).unwrap(),
+            ActionOutcome::ReplaceQuery(r) if r == "note "
+        ));
+        let left = notes.recent(10);
+        assert_eq!(left.len(), 2);
+        assert!(left[0].ends_with("tercera") && left[1].ends_with("primera"));
+        let text = std::fs::read_to_string(&notes.file).unwrap();
+        assert!(text.starts_with("# ") && text.contains("primera\r\n"));
+        // Ya borrada: error claro, sin tocar nada más.
+        assert!(notes.execute(second, ActionId::DELETE).is_err());
+        assert_eq!(notes.recent(10).len(), 2);
+        // Enter sigue abriendo el archivo; Ctrl+D sobre «Abrir archivo» no borra nada.
+        assert!(notes.execute(&got[0], ActionId::DELETE).is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
 

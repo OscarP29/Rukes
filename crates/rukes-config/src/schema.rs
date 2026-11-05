@@ -180,6 +180,11 @@ pub struct Window {
     pub preview_width: u32,
     /// Con la búsqueda vacía, mostrar una leyenda con los comandos más útiles.
     pub hints: bool,
+    /// Cuántos comandos muestra la leyenda.
+    pub hints_count: usize,
+    /// Qué comandos muestra la leyenda y en qué orden (`calc`, `files`, `new`...). Vacío: los de
+    /// siempre.
+    pub hints_items: Vec<String>,
 }
 
 impl Default for Window {
@@ -196,6 +201,8 @@ impl Default for Window {
             preview_panel: false,
             preview_width: 340,
             hints: true,
+            hints_count: 8,
+            hints_items: Vec::new(),
         }
     }
 }

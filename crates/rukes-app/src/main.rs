@@ -1,6 +1,7 @@
 //! Punto de entrada de Rukes: daemon residente con atajo global.
 #![windows_subsystem = "windows"]
 
+mod create_plugin;
 mod host;
 mod iconcache;
 mod logging;

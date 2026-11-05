@@ -4,6 +4,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Leyenda configurable, crear desde el launcher y borrar notas
+
+#### Añadido
+- `nuevo` / `new` / `crear` (o el botón «Nuevo» de la leyenda): crea un tema, un workflow, un
+  script o un plugin. Pregunta lo que falta (qué crear, el nombre y el lenguaje o el tema base),
+  escribe el archivo en su carpeta y lo abre en el editor.
+  - Tema: hereda del actual (o del que elijas) con todos sus valores comentados y se activa.
+  - Workflow: archivo con un workflow de ejemplo y un trigger comentado.
+  - Plugin: carpeta con `plugin.toml` y un programa que ya responde al protocolo, en Python,
+    Node.js o PowerShell.
+  - Script: lo sigue creando `new script`, que ya pregunta el lenguaje.
+- Ajustes «Comandos en la leyenda» y «Comandos que muestra la leyenda» (`[window] hints_count` y
+  `hints_items`); nuevos ejemplos `new` y `note`.
+- Ctrl+D borra la nota seleccionada en `note`; comando `notes.delete` para scripts.
+- Panel de ajustes: casillas para elegir varias opciones.
+
+#### Cambiado
+- La leyenda de comandos es una sola columna en vez de una cuadrícula de dos.
+
 ### Comandos entre plugins y scripts
 
 #### Añadido

@@ -9,6 +9,8 @@ mod hints;
 mod panel;
 mod theme;
 
+pub use hints::options as hint_options;
+
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -71,6 +73,8 @@ pub enum SettingValue {
     Int(i64),
     /// Texto o una de las opciones de una lista.
     Text(String),
+    /// Varias opciones de una lista, en orden.
+    List(Vec<String>),
 }
 
 /// Tipo de control de un ajuste.
@@ -91,6 +95,9 @@ pub enum SettingKind {
     },
     /// Texto libre (`SettingValue::Text`).
     Text,
+    /// Varias opciones `(valor, etiqueta)` con casillas (`SettingValue::List`). El orden del
+    /// valor es el de las opciones.
+    Multi(Vec<(String, String)>),
 }
 
 /// Un ajuste del panel visual.
@@ -248,6 +255,10 @@ pub struct UiConfig {
     pub anchor_bottom: bool,
     /// Leyenda de comandos con la búsqueda vacía.
     pub hints: bool,
+    /// Cuántos comandos muestra la leyenda.
+    pub hints_count: usize,
+    /// Cuáles y en qué orden (ids de [`hint_options`]); vacío: los de siempre.
+    pub hints_items: Vec<String>,
 }
 
 impl Default for UiConfig {
@@ -264,6 +275,8 @@ impl Default for UiConfig {
             preview_width: 340.0,
             anchor_bottom: false,
             hints: true,
+            hints_count: 8,
+            hints_items: Vec::new(),
         }
     }
 }

@@ -36,7 +36,15 @@ Rukes aprende: lo que eliges más a menudo para una búsqueda sube en la lista.
 Con la búsqueda vacía aparece una **leyenda** con ejemplos: haz clic en uno para escribirlo.
 En la fila seleccionada (o bajo el ratón) aparecen **botones** con las demás acciones (abrir
 la carpeta, copiar la ruta, como administrador, ver detalles…); pasa el ratón por encima para
-ver qué hace cada uno. La leyenda se quita con `hints = false` en `[window]`.
+ver qué hace cada uno. En los ajustes (pestaña Ventana) eliges cuántos comandos muestra la
+leyenda y cuáles; en `config.toml` son `hints_count` y `hints_items` de `[window]`, y
+`hints = false` la quita.
+
+**Crear cosas nuevas:** escribe `nuevo` (o `new`, o pulsa «Nuevo» en la leyenda) y elige qué
+crear: un tema, un workflow, un script o un plugin. Rukes te pide el nombre y, si hace falta,
+el lenguaje (scripts y plugins) o el tema en que basarte; crea el archivo en su carpeta y lo
+abre en el editor. Un tema nuevo se activa al momento. También directo: `nuevo tema Mi tema`,
+`nuevo workflow Modo foco`, `nuevo plugin Mi bot`, `nuevo script Backup`.
 
 ## Qué puedes escribir
 
@@ -95,7 +103,8 @@ admin = false
   ventana anterior, `Ctrl+S` fija un elemento. No guarda lo que los gestores de contraseñas
   marcan como sensible ni las apps de `[plugins.clipboard] exclude`.
 - `snip`, `firma Ana`: snippets con variables (`{fecha}`, `{cursor}`, `{campo:Nombre}`).
-- `note idea`, `todo comprar pan`, `todo`: notas y tareas en Markdown.
+- `note idea`, `todo comprar pan`, `todo`: notas y tareas en Markdown. En la lista de `note`,
+  Ctrl+D borra la nota seleccionada.
 - `remind 15m llamar a Ana`, `recordar 14:30 reunión`: recordatorios.
 
 ### Ayuda
