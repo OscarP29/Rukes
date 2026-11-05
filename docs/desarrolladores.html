@@ -43,6 +43,7 @@
   <a class="item" href="#persistencia">Persistencia</a>
   <div class="group">Trabajar en el código</div>
   <a class="item" href="#comandos-dev">Compilar y probar</a>
+  <a class="item" href="#multiplataforma">Windows, Linux y macOS</a>
   <a class="item" href="#recetas">Recetas</a>
   <a class="item" href="#release">Publicar una versión</a>
 </nav>
@@ -765,6 +766,9 @@ antes de que lleguen al campo de texto, según el modo:</p>
   <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td><code>RUN_AS_ADMIN</code> / <code>OPEN_LOCATION</code> si la fila la tiene</td></tr>
   <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>O</kbd>/<kbd>T</kbd>/<kbd>E</kbd>/<kbd>D</kbd>/<kbd>S</kbd></td><td><code>COPY_PATH</code>, <code>OPEN_WITH</code>, <code>TERMINAL_HERE</code>, <code>EDIT</code>, <code>DELETE</code>, <code>PIN</code>. <kbd>Ctrl</kbd>+<kbd>C</kbd> sin acción y con texto seleccionado copia el texto.</td></tr>
   <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Alterna el panel de vista previa/detalle</td></tr>
+  <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td><code>execute(offset + n − 1, actions[0])</code>. Con <kbd>Alt</kbd> no: Windows manda también el carácter y el campo de texto lo escribiría</td></tr>
+  <tr><td></td><td><kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td><td>Solo con los fijados a la vista: <code>host.pin_shift(item, ±1)</code> y recarga</td></tr>
+  <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>S</kbd> (fijar)</td><td>El host añade <code>PIN</code> a los resultados de <code>apps</code>, <code>files</code>, <code>scripts</code>, <code>workflows</code> y las carpetas de <code>rukes</code> y resuelve la acción él mismo; los plugins con su propio <code>PIN</code> (portapapeles) la siguen recibiendo</td></tr>
   <tr><td></td><td>flechas, <kbd>Tab</kbd>, <kbd>Ctrl</kbd>+<kbd>J</kbd>/<kbd>K</kbd>, <kbd>RePág</kbd>/<kbd>AvPág</kbd></td><td><code>select(i)</code> (también redimensiona); invertido si la ventana está anclada abajo</td></tr>
   <tr><td></td><td><kbd>Esc</kbd></td><td><code>host.hide()</code></td></tr>
   <tr><td>Ajustes</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Esc</kbd></td><td><code>save_settings(cambios)</code> / volver a búsqueda</td></tr>
@@ -818,6 +822,7 @@ correcto (<code>// SAFETY:</code>).</p>
   <tr><td>Índice de archivos</td><td><code>cache\files.bin</code></td><td>Binario propio</td></tr>
   <tr><td>Historial de scripts (<code>logs</code>)</td><td><code>state\script-runs.json</code></td><td>JSON</td></tr>
   <tr><td>Recordatorios</td><td><code>state\reminders.json</code></td><td>JSON</td></tr>
+  <tr><td>Fijados</td><td><code>state\pinned.json</code></td><td>JSON (<code>rukes_core::pins</code>): copia de cada resultado con su <code>payload</code>; se ejecuta con el plugin que lo dio</td></tr>
   <tr><td>Tasas de cambio</td><td><code>cache\currency.json</code></td><td>JSON con fecha</td></tr>
   <tr><td>Notas y tareas</td><td><code>%APPDATA%\Rukes\notes\*.md</code></td><td>Markdown plano</td></tr>
 </table>
@@ -859,6 +864,224 @@ set RUKES_LOG=debug</code></pre>
   <li>Temas: <code>every_builtin_theme_loads</code> carga todos los incluidos.</li>
   <li>Config: <code>default_template_parses_to_defaults</code>, errores con línea y columna.</li>
   <li>Las pruebas de interfaz son manuales: hay listas en <code>docs/checklists/</code>.</li>
+</ul>
+
+<h1 id="multiplataforma">Windows, Linux y macOS</h1>
+<p class="lead">Hoy Rukes solo compila para Windows. Esta sección explica por qué, qué partes ya
+son portables y cómo llegar a tener las tres versiones.</p>
+
+<h2 id="multi-estado">Estado actual</h2>
+<table>
+  <tr><th>Crate</th><th>¿Portable?</th><th>Qué lo ata a Windows</th></tr>
+  <tr><td><code>rukes-core</code></td><td>Sí</td><td>Nada: motor, ranking, frecency, i18n, modelo HTTP, fijados.</td></tr>
+  <tr><td><code>rukes-config</code></td><td>Casi</td><td><code>Paths::detect</code> usa <code>%APPDATA%</code> y <code>%LOCALAPPDATA%</code>.</td></tr>
+  <tr><td><code>rukes-ui</code></td><td>Casi</td><td>iced + tiny-skia es multiplataforma; solo <code>app.rs</code> extrae el <code>HWND</code> de <code>RawWindowHandle::Win32</code>.</td></tr>
+  <tr><td><code>rukes-platform</code></td><td>No</td><td>29 módulos (~4 600 líneas) escritos directamente sobre el crate <code>windows</code>, sin <code>#[cfg]</code>.</td></tr>
+  <tr><td><code>rukes-plugins</code>, <code>rukes-script</code></td><td>No, por arrastre</td><td>Dependen de <code>rukes-platform</code>; además hay intérpretes de Windows (<code>.ps1</code>, <code>.cmd</code>) y rutas con <code>\</code>.</td></tr>
+  <tr><td><code>rukes-app</code></td><td>No</td><td>Bandeja, atajos globales, DWM, instancia única; <code>build.rs</code> incrusta el icono con <code>embed-resource</code>.</td></tr>
+</table>
+<p>También son solo de Windows <code>.cargo/config.toml</code> (CRT estático para MSVC), el
+instalador Inno Setup (<code>packaging/rukes.iss</code>), winget y los workflows de CI
+(<code>runs-on: windows-latest</code>).</p>
+
+<h2 id="multi-plan">Plan para portarlo</h2>
+<h3>1. Una fachada en rukes-platform</h3>
+<p>Las funciones públicas de <code>rukes-platform</code> ya son la frontera correcta: el resto del
+código no ve tipos de Windows. Se mantienen esas firmas y se reparte la implementación por
+sistema:</p>
+<pre><code class="language-text">crates/rukes-platform/src/
+  lib.rs            ← los mismos `pub mod` y tipos (Hwnd, PlatformError…)
+  shell.rs          ← fachada: #[cfg] y reexporta
+  sys/windows/…     ← el código de hoy, movido tal cual
+  sys/linux/…
+  sys/macos/…</code></pre>
+<pre><code class="language-rust">// shell.rs
+#[cfg(windows)]
+pub use crate::sys::windows::shell::*;
+#[cfg(target_os = "linux")]
+pub use crate::sys::linux::shell::*;
+#[cfg(target_os = "macos")]
+pub use crate::sys::macos::shell::*;</code></pre>
+<pre><code class="language-toml"># Cargo.toml de rukes-platform: el crate windows solo en Windows
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [ … ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# zbus, x11rb, …
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# objc2, objc2-app-kit, core-graphics, …</code></pre>
+<p><code>PlatformError::Win32</code> pasa a ser una variante solo de Windows y se añade
+<code>PlatformError::Unsupported(&amp;'static str)</code> para lo que un sistema no pueda hacer.
+Los plugins ya convierten los errores en un aviso en la ventana.</p>
+
+<h3>2. Primero que compile: stubs</h3>
+<p>Antes de implementar nada, cada módulo de Linux y macOS devuelve
+<code>Err(Unsupported)</code> o una lista vacía. Con eso la compilación ya pasa y se puede avanzar
+módulo a módulo con la app arrancando. En este paso se revisan también los <code>#[cfg]</code> de
+<code>rukes-plugins</code> y <code>rukes-script</code> que hoy suponen Windows
+(<code>external/process.rs</code>, <code>files/index.rs</code>, <code>workflows/run.rs</code>,
+<code>proc.rs</code>).</p>
+
+<h3>3. Equivalencias por módulo</h3>
+<table>
+  <tr><th>Módulo</th><th>Linux</th><th>macOS</th></tr>
+  <tr><td><code>hotkey</code></td><td>Crate <code>global-hotkey</code> (X11). En Wayland no hay atajos globales: el usuario crea un atajo del escritorio que ejecute <code>rukes --toggle</code></td><td><code>global-hotkey</code> (Carbon <code>RegisterEventHotKey</code>)</td></tr>
+  <tr><td><code>tray</code></td><td>Crate <code>tray-icon</code> (AppIndicator / StatusNotifier)</td><td><code>tray-icon</code> (<code>NSStatusItem</code>)</td></tr>
+  <tr><td><code>instance</code></td><td>Socket Unix en <code>$XDG_RUNTIME_DIR/rukes.sock</code>; el segundo arranque envía «mostrar»</td><td>Igual, en <code>$TMPDIR</code></td></tr>
+  <tr><td><code>apps</code></td><td>Archivos <code>.desktop</code> en <code>$XDG_DATA_DIRS/applications</code> y <code>~/.local/share/applications</code></td><td><code>/Applications</code>, <code>~/Applications</code> y <code>/System/Applications</code> (<code>*.app</code>)</td></tr>
+  <tr><td><code>icons</code></td><td>Tema de iconos freedesktop (crate <code>freedesktop-icons</code>), PNG/SVG</td><td><code>NSWorkspace iconForFile</code> → RGBA</td></tr>
+  <tr><td><code>shell</code> (abrir)</td><td><code>xdg-open</code>; «como administrador» con <code>pkexec</code></td><td><code>open</code>; administrador con <code>osascript … with administrator privileges</code></td></tr>
+  <tr><td><code>explorer</code> (mostrar en carpeta)</td><td>D-Bus <code>org.freedesktop.FileManager1.ShowItems</code></td><td><code>open -R &lt;ruta&gt;</code></td></tr>
+  <tr><td><code>clipboard</code>, <code>clipwatch</code></td><td>Crate <code>arboard</code>; escucha por sondeo (X11) o <code>wl-paste --watch</code></td><td><code>arboard</code>; sondeo de <code>NSPasteboard.changeCount</code></td></tr>
+  <tr><td><code>dpapi</code> (cifrar historial)</td><td>Secret Service (crate <code>keyring</code>) guarda una clave y se cifra con ella</td><td>Llavero (<code>keyring</code>)</td></tr>
+  <tr><td><code>input</code> (pegar)</td><td>X11: XTest; Wayland: <code>ydotool</code> o <code>wtype</code> (o solo copiar)</td><td><code>CGEventPost</code> con <kbd>⌘</kbd>+<kbd>V</kbd>; necesita permiso de Accesibilidad</td></tr>
+  <tr><td><code>window</code>, <code>winlist</code></td><td>X11: EWMH (<code>_NET_CLIENT_LIST</code>, <code>_NET_ACTIVE_WINDOW</code>); Wayland: muy limitado</td><td>API de Accesibilidad (<code>AXUIElement</code>) y <code>CGWindowListCopyWindowInfo</code></td></tr>
+  <tr><td><code>monitor</code></td><td>Lo da winit / iced</td><td>Lo da winit / iced</td></tr>
+  <tr><td><code>dwm</code> (Mica, esquinas)</td><td>No existe: fondo sólido o la transparencia del compositor</td><td><code>NSVisualEffectView</code> (opcional; al principio, sólido)</td></tr>
+  <tr><td><code>syscontrol</code></td><td>Volumen con <code>wpctl</code>/<code>pactl</code>, brillo con <code>brightnessctl</code>, red con NetworkManager (D-Bus)</td><td>Volumen con <code>osascript</code>; brillo y wifi limitados</td></tr>
+  <tr><td><code>power</code></td><td><code>systemctl suspend/poweroff/reboot</code>, <code>loginctl lock-session</code></td><td><code>pmset</code>, <code>osascript</code> (System Events)</td></tr>
+  <tr><td><code>appearance</code></td><td>Portal <code>org.freedesktop.appearance color-scheme</code></td><td><code>AppleInterfaceStyle</code></td></tr>
+  <tr><td><code>wallpaper</code></td><td><code>gsettings</code> (GNOME), <code>plasma-apply-wallpaperimage</code> (KDE)</td><td><code>NSWorkspace setDesktopImageURL</code></td></tr>
+  <tr><td><code>autostart</code></td><td><code>~/.config/autostart/rukes.desktop</code></td><td>LaunchAgent en <code>~/Library/LaunchAgents</code></td></tr>
+  <tr><td><code>everything</code></td><td><code>plocate</code> si está; si no, el índice propio</td><td>Spotlight (<code>mdfind</code>)</td></tr>
+  <tr><td><code>http</code></td><td colspan="2">WinHTTP se sustituye por <code>ureq</code> con rustls en los tres sistemas (así el código es uno solo)</td></tr>
+  <tr><td><code>job</code>, <code>process</code></td><td colspan="2">Grupos de procesos (<code>setsid</code>, <code>killpg</code>) en vez de Job Objects; <code>/proc</code> en Linux, crate <code>sysinfo</code> en ambos</td></tr>
+  <tr><td><code>text</code>, <code>com</code></td><td colspan="2">Solo hacen falta en Windows (UTF-16, COM)</td></tr>
+</table>
+
+<h3>4. Lo que hay fuera de rukes-platform</h3>
+<ul>
+  <li><b>Rutas</b> (<code>Paths::detect</code>): en Linux <code>~/.config/rukes</code>,
+    <code>~/.local/state/rukes</code> y <code>~/.cache/rukes</code> (respetando las variables
+    <code>XDG_*</code>); en macOS <code>~/Library/Application Support/Rukes</code>,
+    <code>~/Library/Caches/Rukes</code> y <code>~/Library/Logs/Rukes</code>. El modo portable no
+    cambia.</li>
+  <li><b>UI</b>: <code>app.rs</code> debe aceptar también <code>RawWindowHandle::Xlib</code>,
+    <code>Wayland</code> y <code>AppKit</code> (o que <code>window_ready</code> reciba un tipo
+    neutro). Hay que probar la posición anclada abajo y <code>resize_keep_bottom</code>, que hoy
+    hace el host con la API de Windows.</li>
+  <li><b>Teclas</b>: en macOS lo natural es <kbd>⌘</kbd> en lugar de <kbd>Ctrl</kbd>. En iced,
+    <code>modifiers.command()</code> ya es <kbd>⌘</kbd> en macOS y <kbd>Ctrl</kbd> en el resto: se
+    cambian los <code>m.control()</code> del launcher por <code>m.command()</code>.</li>
+  <li><b>Scripts</b>: sin <code>cmd</code>; <code>.ps1</code> usa <code>pwsh</code> si existe;
+    <code>.sh</code> con <code>sh</code>/<code>bash</code>, respetando el shebang
+    (<code>#!/usr/bin/env python3</code>). Las plantillas añaden una de shell.</li>
+  <li><b>Plugins externos</b>: el <code>command</code> de <code>plugin.toml</code> puede necesitar
+    variantes por sistema (<code>command.windows</code>, <code>command.linux</code>…).</li>
+  <li><b><code>build.rs</code></b>: llamar a <code>embed-resource</code> solo si
+    <code>CARGO_CFG_TARGET_OS == "windows"</code>.</li>
+  <li><b>Textos</b>: «Explorador», «Iniciar con Windows»… pasan a claves que dependan del
+    sistema o a textos neutros («gestor de archivos», «Iniciar con el sistema»).</li>
+</ul>
+
+<h3>5. Orden recomendado</h3>
+<ol>
+  <li><b>Que compile en los tres</b> con stubs y CI en matriz (abajo), sin funcionalidad nueva.</li>
+  <li><b>Mínimo usable</b>: rutas, instancia única, atajo global, bandeja, ventana, apps con
+    iconos, abrir archivos, calculadora, archivos y portapapeles. Con esto ya es un launcher.</li>
+  <li><b>Paridad</b>: ventanas, controles del sistema, pegar, fondos, inicio automático y
+    cifrado del historial.</li>
+  <li><b>Distribución</b> en cada sistema.</li>
+</ol>
+<div class="warn">Empieza por X11 en Linux. En Wayland no hay atajos globales, ni posición absoluta
+de ventanas, ni lista de ventanas de otras apps: son límites del protocolo, no de Rukes. La
+solución habitual (la de otros launchers) es que el usuario cree un atajo del escritorio que
+ejecute <code>rukes --toggle</code>.</div>
+
+<h2 id="multi-compilar">Compilar cada versión</h2>
+<p>Compila cada sistema en ese sistema (o en su runner de CI). Compilar para macOS desde Windows
+o Linux exige el SDK de Apple y no merece la pena; para Linux desde Windows sirve WSL.</p>
+
+<h3>Windows (lo que funciona hoy)</h3>
+<pre><code class="language-bash"># Rust estable con el toolchain MSVC
+# (Visual Studio Build Tools, carga «Desarrollo para el escritorio con C++»)
+rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+
+cargo build --release -p rukes-app --target x86_64-pc-windows-msvc
+cargo build --release -p rukes-app --target aarch64-pc-windows-msvc   # ARM64
+# → target\&lt;target&gt;\release\rukes.exe
+
+# Instalador y ZIP portable
+pwsh scripts/package.ps1</code></pre>
+
+<h3>Linux (cuando exista sys/linux)</h3>
+<pre><code class="language-bash"># Debian / Ubuntu: dependencias de winit, la bandeja y D-Bus
+sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev \
+  libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+  libgtk-3-dev libayatana-appindicator3-dev libdbus-1-dev
+# Fedora:
+#   sudo dnf install gcc pkgconf libxkbcommon-devel wayland-devel libX11-devel \
+#     libXcursor-devel libXrandr-devel libXi-devel gtk3-devel \
+#     libayatana-appindicator-gtk3-devel dbus-devel
+
+cargo build --release -p rukes-app
+# → target/release/rukes
+
+# Paquetes
+cargo install cargo-deb && cargo deb -p rukes-app      # .deb
+# AppImage: linuxdeploy con el binario, rukes.desktop y el icono PNG
+# Flatpak: manifiesto con el SDK de freedesktop (permisos de D-Bus y del portal)</code></pre>
+<p>En WSL se puede compilar y ejecutar con WSLg para ver la ventana, aunque el atajo global y la
+bandeja no se comportan como en un escritorio real.</p>
+
+<h3>macOS (cuando exista sys/macos)</h3>
+<pre><code class="language-bash">xcode-select --install
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+cargo build --release -p rukes-app --target aarch64-apple-darwin   # Apple Silicon
+cargo build --release -p rukes-app --target x86_64-apple-darwin    # Intel
+# Binario universal
+lipo -create -output rukes \
+  target/aarch64-apple-darwin/release/rukes \
+  target/x86_64-apple-darwin/release/rukes
+
+# Paquete .app (Info.plist con LSUIElement = true para que no salga en el Dock)
+cargo install cargo-bundle && cargo bundle --release -p rukes-app
+
+# Firmar y notarizar (cuenta de Apple Developer)
+codesign --deep --force --options runtime --sign "Developer ID Application: …" Rukes.app
+xcrun notarytool submit Rukes.zip --apple-id … --team-id … --wait
+xcrun stapler staple Rukes.app</code></pre>
+<div class="note">En macOS el usuario tiene que dar permiso de <b>Accesibilidad</b> (pegar
+snippets, mover ventanas) y, según lo que haga, de <b>Supervisión de entrada</b>. Rukes debe
+detectar si falta y abrir el panel de Ajustes del Sistema correspondiente.</div>
+
+<h3>CI con los tres sistemas</h3>
+<pre><code class="language-yaml">jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Dependencias de Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgtk-3-dev libayatana-appindicator3-dev libdbus-1-dev
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build --release -p rukes-app</code></pre>
+<p>Mientras no existan los stubs, Linux y macOS darán errores de compilación en la matriz. Que se
+pongan en verde es la señal de que el paso 2 está terminado.</p>
+
+<h3>Probar sin cambiar de máquina</h3>
+<ul>
+  <li><code>cargo check -p rukes-app --target x86_64-unknown-linux-gnu</code> desde Windows
+    (tras <code>rustup target add x86_64-unknown-linux-gnu</code>) comprueba tipos y
+    <code>#[cfg]</code> sin enlazar: es lo más rápido para saber si los stubs cubren todo.</li>
+  <li>Linux: WSL2 con WSLg, o una máquina virtual con GNOME (para probar X11 y Wayland).</li>
+  <li>macOS: el runner <code>macos-latest</code> de GitHub para compilar y pasar los tests; para
+    la interfaz hace falta un Mac.</li>
 </ul>
 
 <h2 id="recetas">Recetas</h2>

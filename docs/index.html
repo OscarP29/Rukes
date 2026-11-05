@@ -70,6 +70,18 @@ peticiones HTTP, ejecutas tus scripts y workflows y usas plugins escritos en cua
 </div>
 
 <h2 id="novedades">Novedades</h2>
+<h3>Fijados, carpetas a un clic y JSON con color</h3>
+<ul>
+  <li><b>Fijados:</b> <kbd>Ctrl</kbd>+<kbd>S</kbd> fija una app, archivo, carpeta, script o
+    workflow. Al abrir Rukes sin escribir aparecen bajo <b>FIJADOS</b>; <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd>
+    los abre y <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> los ordena. Ver <a href="#fijados">Fijados</a>.</li>
+  <li><b>Carpetas de Rukes:</b> <code>carpetas</code> lista las de configuración, workflows,
+    plugins, temas, scripts, snippets, notas y logs; <code>carpeta scripts</code> va directo a
+    una. Ver <a href="#carpetas">Carpetas</a>.</li>
+  <li><b>Respuestas con color en el mini Postman:</b> el JSON se ve con claves, textos, números,
+    <code>true</code>/<code>false</code>/<code>null</code> y signos en colores del tema; las
+    cabeceras, con el nombre resaltado. Ver <a href="#http">Mini Postman</a>.</li>
+</ul>
 <h3>Interfaz más ordenada</h3>
 <ul>
   <li><b>Leyenda «SUGERENCIAS»:</b> con la búsqueda vacía ves comandos de ejemplo en dos columnas,
@@ -155,6 +167,30 @@ subtítulo en el centro (cortados con «…»; las rutas se cortan por el medio)
 botones de las demás acciones (copiar, abrir la carpeta, como administrador, ver detalles…), que
 solo aparecen en la fila seleccionada o bajo el ratón. Las tareas llevan su estado como etiqueta
 a la derecha.</p>
+<h3 id="fijados">Fijados</h3>
+<p>Para tener a mano lo que más abres: selecciona una app, un archivo, una carpeta (también las de
+<code>carpetas</code>), un script o un workflow y pulsa <kbd>Ctrl</kbd>+<kbd>S</kbd> (o el botón 📌
+de la fila). La próxima vez que abras Rukes sin escribir nada verás tus fijados en lugar de la
+leyenda de comandos:</p>
+<div class="diagram">┌──────────────────────────────────────────────────────────┐
+│  Buscar…                                       │  ＋  ⚙  │
+├──────────────────────────────────────────────────────────┤
+│  FIJADOS ──────────────────────────────────────────────  │
+│  [icono]  Visual Studio Code                       ← Ctrl+1 │
+│  [icono]  Carpeta de scripts                       ← Ctrl+2 │
+│  [icono]  informe-final.docx                       ← Ctrl+3 │
+├──────────────────────────────────────────────────────────┤
+│  [↵] Abrir             [Ctrl+1…9] Abrir   [Alt+↑↓] Mover │
+└──────────────────────────────────────────────────────────┘</div>
+<table>
+  <tr><th>Tecla</th><th>Qué hace</th></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Fija el resultado; sobre uno fijado, lo quita</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> … <kbd>Ctrl</kbd>+<kbd>9</kbd></td><td>Abre el fijado N (escribiendo, el resultado N de la lista)</td></tr>
+  <tr><td><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd></td><td>Sube o baja el fijado seleccionado</td></tr>
+</table>
+<p>Caben hasta 30 y se guardan en <code>%LOCALAPPDATA%\Rukes\state\pinned.json</code>. Si
+desinstalas una app fijada, al abrirla verás un error: quítala con <kbd>Ctrl</kbd>+<kbd>S</kbd>. En
+el portapapeles <kbd>Ctrl</kbd>+<kbd>S</kbd> sigue fijando el elemento dentro del historial.</p>
 <h3>Pie de atajos</h3>
 <p>Con resultados en la lista, el pie muestra a la izquierda la acción de <kbd>Enter</kbd> de la
 fila seleccionada (por ejemplo <kbd>↵</kbd> Abrir, <kbd>↵</kbd> Copiar, <kbd>↵</kbd> Completar) y a
@@ -207,7 +243,9 @@ propios.</p>
   <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Terminal en la carpeta</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Editar (scripts, snippets, workflows)</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Borrar (notas, snippets, historial del portapapeles, recordatorios)</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Fijar un elemento del portapapeles</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Fijar o quitar una app, archivo, carpeta, script o workflow (<a href="#fijados">Fijados</a>); en el portapapeles, fijar el elemento</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> … <kbd>Ctrl</kbd>+<kbd>9</kbd></td><td>Abrir el resultado N (con la búsqueda vacía, el fijado N)</td></tr>
+  <tr><td><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd></td><td>Cambiar de puesto un fijado</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Mostrar u ocultar la vista previa</td></tr>
   <tr><td><kbd>Esc</kbd></td><td>Ocultar Rukes</td></tr>
 </table>
@@ -357,6 +395,18 @@ gh = "https://github.com/search?q={q}"</code></pre>
   <tr><td>Logs</td><td><code>%LOCALAPPDATA%\Rukes\logs</code> (más detalle con <code>RUKES_LOG=debug</code>)</td></tr>
 </table>
 <p>En modo portable todo va a la carpeta <code>data</code> junto a <code>rukes.exe</code>.</p>
+<h3>Abrirlas desde Rukes</h3>
+<p>No hace falta recordar las rutas: escribe <code>carpetas</code> (o <code>folders</code>) y
+saldrán todas; <code>carpeta work</code>, <code>carpeta temas</code>… filtran. También aparecen al
+buscar «carpeta de scripts».</p>
+<table>
+  <tr><th>Tecla</th><th>Qué hace</th></tr>
+  <tr><td><kbd>Enter</kbd></td><td>Abre la carpeta en el Explorador (si aún no existe, la crea)</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>Copia la ruta</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>La fija en el inicio</td></tr>
+</table>
+<p>Las rutas respetan lo que tengas en <code>config.toml</code>: si cambiaste
+<code>[workflows] dir</code> o <code>[scripts] dir</code>, se abre esa carpeta.</p>
 
 <h2 id="apps">Apps, perfiles y archivos</h2>
 <p>Las apps se indexan del menú Inicio, la Tienda y (opcional) el PATH, y se reindexan solas al
@@ -545,6 +595,11 @@ sensible ni lo copiado desde las apps de <code>[plugins.clipboard] exclude</code
   <li><b>Respuesta:</b> estado en color (2xx correcto, 3xx acento, 4xx aviso, 5xx error), tiempo,
     tamaño y tipo; debajo el cuerpo con JSON sangrado, que se puede seleccionar. Se muestran
     hasta 512 KB.</li>
+  <li><b>Colores:</b> si el <code>Content-Type</code> es JSON o el cuerpo empieza por
+    <code>{</code> o <code>[</code>, las claves van en el color de acento, los textos en verde, los
+    números en ámbar, <code>true</code>/<code>false</code>/<code>null</code> en rojo y los signos en
+    gris. Con <kbd>Ctrl</kbd>+<kbd>H</kbd> las cabeceras resaltan su nombre. HTML y texto se
+    muestran sin color. Los tonos salen del tema activo.</li>
 </ul>
 <p>Los atajos están en <a href="#atajos">Atajos de teclado</a>. El historial solo vive en memoria
 (puede contener tokens) y se borra al cerrar Rukes.</p>
