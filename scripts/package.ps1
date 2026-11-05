@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   Compila Rukes en release y genera en dist/ el ZIP portable, el instalador (si hay Inno Setup)
-  y los manifiestos de winget con los SHA-256 (RNF-032). Si hay certificado (SIGN_PFX o
+  y SHA256SUMS.txt (RNF-032). Si hay certificado (SIGN_PFX o
   SIGN_PFX_FILE, ver scripts/sign.ps1) firma el exe y el instalador antes de calcular los hashes.
 
 .EXAMPLE
@@ -11,9 +11,7 @@
 param(
     [switch]$SkipBuild,
     # Carpeta de compilación (cargo --target-dir).
-    [string]$TargetDir = 'target',
-    # URL base de descarga de la release (para el manifiesto de winget). Cambia OWNER por tu usuario.
-    [string]$BaseUrl = "https://github.com/OWNER/rukes/releases/download"
+    [string]$TargetDir = 'target'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -68,23 +66,9 @@ if ($iscc) {
     Write-Warning "Inno Setup 6 no está instalado: se omite el instalador (winget install JRSoftware.InnoSetup)."
 }
 
-# --- SHA-256 y manifiestos de winget.
+# --- SHA-256.
 $sums = Get-ChildItem $dist -File | ForEach-Object {
     "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
 }
 $sums | Set-Content (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
 $sums | Write-Host
-
-if ($setup) {
-    $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
-    $out = Join-Path $dist "winget/$version"
-    New-Item -ItemType Directory $out -Force | Out-Null
-    foreach ($f in Get-ChildItem packaging/winget -Filter *.yaml) {
-        (Get-Content $f.FullName -Raw).
-            Replace('{{VERSION}}', $version).
-            Replace('{{SHA256}}', $hash).
-            Replace('{{URL}}', "$BaseUrl/v$version/Rukes-$version-setup-x64.exe") |
-            Set-Content (Join-Path $out $f.Name) -Encoding utf8
-    }
-    Write-Host "Manifiestos de winget: $out"
-}

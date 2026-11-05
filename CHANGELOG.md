@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Distribución
+
+- Se quita la distribución por winget: plantillas de `packaging/winget`, su generación en
+  `scripts/package.ps1` (y el parámetro `-BaseUrl`), el artefacto del workflow de release y
+  las menciones en la documentación. Rukes se distribuye con el instalador y el ZIP portable.
+- El autor y editor (exe, instalador, `Cargo.toml`, licencia MIT) pasa a ser OscarP29.
+
 ### Documentación
 
 - Guía de usuario HTML rehecha (`docs/index.html`): la ventana nueva, todos los atajos de teclado

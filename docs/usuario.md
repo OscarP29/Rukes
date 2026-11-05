@@ -13,7 +13,6 @@ escribe y pulsa `Enter`.
 - **Instalador** (`Rukes-<versión>-setup-x64.exe`): se instala para tu usuario en
   `%LOCALAPPDATA%\Programs\Rukes`, sin permisos de administrador. Al desinstalar se conserva
   tu configuración.
-- **winget**: `winget install HenryOsorio.Rukes` (cuando el paquete esté publicado).
 - **Portable** (`Rukes-<versión>-portable-x64.zip`): descomprime en cualquier carpeta (o en
   un USB) y ejecuta `rukes.exe`. El archivo `portable.txt` hace que la configuración, la caché
   y los logs se guarden en la carpeta `data` junto al exe. Bórralo para usar `%APPDATA%\Rukes`.

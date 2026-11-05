@@ -881,7 +881,7 @@ son portables y cómo llegar a tener las tres versiones.</p>
   <tr><td><code>rukes-app</code></td><td>No</td><td>Bandeja, atajos globales, DWM, instancia única; <code>build.rs</code> incrusta el icono con <code>embed-resource</code>.</td></tr>
 </table>
 <p>También son solo de Windows <code>.cargo/config.toml</code> (CRT estático para MSVC), el
-instalador Inno Setup (<code>packaging/rukes.iss</code>), winget y los workflows de CI
+instalador Inno Setup (<code>packaging/rukes.iss</code>) y los workflows de CI
 (<code>runs-on: windows-latest</code>).</p>
 
 <h2 id="multi-plan">Plan para portarlo</h2>
@@ -1130,7 +1130,7 @@ pongan en verde es la señal de que el paso 2 está terminado.</p>
 <h2 id="release">Publicar una versión</h2>
 <p>El proceso completo está en <a href="release.md"><code>docs/release.md</code></a>: subir la
 versión en <code>Cargo.toml</code>, actualizar <code>CHANGELOG.md</code>, compilar en release,
-generar el instalador y el ZIP portable, firmar, y publicar el manifiesto de winget. Las
+generar el instalador y el ZIP portable, firmar y publicar la release. Las
 mediciones de rendimiento de referencia están en
 <a href="benchmarks.md"><code>docs/benchmarks.md</code></a>.</p>
 

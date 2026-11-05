@@ -21,7 +21,6 @@ Launcher de productividad y automatización para Windows 10/11, escrito en Rust:
 
 - **Instalador:** `Rukes-<versión>-setup-x64.exe` de la página de releases. Se instala para tu
   usuario, sin administrador.
-- **winget:** `winget install HenryOsorio.Rukes`.
 - **Portable:** descomprime `Rukes-<versión>-portable-x64.zip` donde quieras; con
   `portable.txt` todo se guarda en la carpeta `data` junto al exe.
 
@@ -34,7 +33,7 @@ cargo build --release -p rukes-app
 ```
 
 El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (por ejemplo `RUKES_LOG=debug`).
-Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/release.md`](docs/release.md).
+Para generar el ZIP, y el instalador, ver [`docs/release.md`](docs/release.md).
 
 ## Uso
 
@@ -132,7 +131,7 @@ Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/relea
 | `themes/` | Temas incluidos (TOML) |
 | `spikes/` | Prototipos desechables de la fase 0 (workspace aparte) |
 | `docs/decisions/` | ADRs |
-| `packaging/`, `scripts/` | Instalador (Inno Setup), manifiestos de winget, empaquetado y firma |
+| `packaging/`, `scripts/` | Instalador (Inno Setup), empaquetado y firma |
 
 ## Licencia
 

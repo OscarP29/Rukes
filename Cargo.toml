@@ -9,7 +9,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = ""
-authors = ["Henry Osorio"]
+authors = ["OscarP29"]
 
 [workspace.dependencies]
 rukes-core = { path = "crates/rukes-core" }

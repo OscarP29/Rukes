@@ -28,7 +28,6 @@ los controles del sistema en modo solo lectura.
 | --- | --- | --- | --- |
 | CRT estático, sin redistribuibles | RNF-031 | ✅ | `.cargo/config.toml` |
 | ZIP portable e instalador (Inno Setup) | RNF-032 | ⚠️ | ZIP generado en local; el instalador se genera en CI (Inno Setup no está instalado aquí) |
-| Manifiestos de winget | RNF-032 | ⚠️ | Plantillas en `packaging/winget`; el PR a winget-pkgs se hace tras publicar |
 | Instalación sin administrador | RNF-033 | ⚠️ | `PrivilegesRequired=lowest`; pendiente de probar el instalador |
 | Icono y versión en el exe | — | ✅ | Propiedades → Detalles |
 | Firma de código | — | ➖ | Sin certificado; `scripts/sign.ps1` y secretos de CI preparados |

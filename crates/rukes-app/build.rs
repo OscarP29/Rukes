@@ -1,4 +1,4 @@
-//! Incrusta en `rukes.exe` el icono y la información de versión (Explorador, instalador, winget).
+//! Incrusta en `rukes.exe` el icono y la información de versión (Explorador, instalador).
 
 use std::path::PathBuf;
 
@@ -32,7 +32,7 @@ BEGIN
   BEGIN
     BLOCK "040904b0"
     BEGIN
-      VALUE "CompanyName", "Henry Osorio"
+      VALUE "CompanyName", "OscarP29"
       VALUE "FileDescription", "Rukes"
       VALUE "FileVersion", "{version}"
       VALUE "InternalName", "rukes"
