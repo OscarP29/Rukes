@@ -47,6 +47,13 @@ pub enum ActionOutcome {
     },
     /// Abrir el panel visual de ajustes del launcher.
     OpenSettings,
+    /// Abrir el mini Postman con esta petición; `send`: enviarla al abrir.
+    OpenHttp {
+        /// Petición.
+        form: Box<crate::HttpForm>,
+        /// Enviarla en cuanto se abra.
+        send: bool,
+    },
 }
 
 /// Error de un plugin.

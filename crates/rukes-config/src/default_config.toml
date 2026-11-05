@@ -202,8 +202,12 @@ enabled = true
 
 [plugins.http]
 # Mini Postman: "http 3000/api" (un número es un puerto de localhost), "post :8080/login {...}",
-# "-H \"Nombre: valor\"" para cabeceras. Solo envía al pulsar Enter.
+# "-H \"Nombre: valor\"" para cabeceras. Solo envía al pulsar Enter. "http" a secas abre el
+# panel: Tab despliega cabeceras, cuerpo, auth y parámetros; ↑ ↓ recorren el historial y pegar
+# una orden curl rellena todo.
 enabled = true
+# Atajo global que abre el mini Postman directamente (p. ej. "ctrl+alt+p"). Vacío: ninguno.
+hotkey = ""
 
 [plugins.wall]
 # "wall": tus fondos de pantalla con previsualización; Enter lo pone, "wall random" elige uno.

@@ -1,16 +1,17 @@
-//! `http`: un mini Postman. `http 3000/api` hace `GET http://localhost:3000/api`;
-//! `post :8080/login {"u":"ana"}` envía JSON; `-H "Nombre: valor"` añade cabeceras. La petición
-//! solo sale al pulsar Enter (nunca al escribir) y la respuesta se muestra en el launcher:
-//! estado, tiempo, tamaño, cabeceras y cuerpo (JSON formateado) en el panel de detalles.
+//! `http`: un mini Postman. `http` abre su ventana (método, dirección y pestañas de cabeceras,
+//! cuerpo, autenticación y parámetros); `http 3000/api` hace `GET http://localhost:3000/api`;
+//! `post :8080/login {"u":"ana"}` envía JSON; `-H "Nombre: valor"` añade cabeceras; una orden
+//! `curl` pegada se convierte en la petición. Nada se envía hasta pulsar Enter.
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use base64::Engine as _;
 use rukes_core::i18n::{tr, trf};
 use rukes_core::{
-    ActionId, ActionOutcome, CancelToken, Icon, Plugin, PluginError, PluginMetadata, Query,
-    ResultItem,
+    ActionId, ActionOutcome, CancelToken, HttpForm, HttpResponse, Icon, Plugin, PluginError,
+    PluginMetadata, Query, ResultItem,
 };
 use serde::{Deserialize, Serialize};
 
@@ -22,12 +23,12 @@ const KEYWORDS: [&str; 2] = ["http", "req"];
 const HISTORY: usize = 30;
 /// Tamaño máximo de la respuesta.
 const MAX_BYTES: usize = 4 * 1024 * 1024;
-/// Texto como mucho en el panel de detalles (lo copiado es el cuerpo entero).
-const MAX_DETAIL: usize = 16 * 1024;
+/// Texto como mucho en la vista de la respuesta.
+const MAX_SHOWN: usize = 512 * 1024;
 /// Tiempo máximo de cada fase de la petición.
 const TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Una petición.
+/// Una petición lista para enviar.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Req {
     /// Método en mayúsculas.
@@ -56,6 +57,23 @@ impl Req {
 
     fn label(&self) -> String {
         format!("{} {}", self.method, self.url)
+    }
+
+    /// La petición como formulario editable.
+    pub fn to_form(&self) -> HttpForm {
+        HttpForm {
+            method: self.method.clone(),
+            url: self.url.clone(),
+            headers: self
+                .headers
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            body: self.body.clone(),
+            auth: String::new(),
+            params: String::new(),
+        }
     }
 }
 
@@ -88,7 +106,7 @@ pub fn normalize_url(s: &str) -> Option<String> {
         .unwrap_or("")
         .rsplit_once(':')
         .map_or(s.split(['/', '?', '#']).next().unwrap_or(""), |(h, _)| h);
-    if host.is_empty() {
+    if host.is_empty() || host.contains(char::is_whitespace) {
         return None;
     }
     let local = host.eq_ignore_ascii_case("localhost")
@@ -109,6 +127,27 @@ fn next_token(s: &str) -> Option<(String, &str)> {
     }
     let end = s.find(char::is_whitespace).unwrap_or(s.len());
     Some((s[..end].to_owned(), &s[end..]))
+}
+
+/// Pone `Content-Type` si hay cuerpo y no lo tiene: JSON si lo parece, si no texto.
+fn add_content_type(headers: &mut Vec<(String, String)>, body: &str) {
+    let has_type = headers
+        .iter()
+        .any(|(k, _)| k.eq_ignore_ascii_case("content-type"));
+    if !body.is_empty() && !has_type {
+        let b = body.trim_start();
+        let json = (b.starts_with('{') || b.starts_with('['))
+            && serde_json::from_str::<serde_json::Value>(body).is_ok();
+        headers.push((
+            "Content-Type".into(),
+            if json {
+                "application/json"
+            } else {
+                "text/plain; charset=utf-8"
+            }
+            .into(),
+        ));
+    }
 }
 
 /// Interpreta `[MÉTODO] dirección [-H "Nombre: valor"]… [cuerpo]`. `method` es el método si el
@@ -147,22 +186,383 @@ pub fn parse(method: Option<&str>, text: &str) -> Option<Req> {
         body = body[1..body.len() - 1].to_owned();
     }
     let method = method.unwrap_or_else(|| if body.is_empty() { "GET" } else { "POST" }.into());
-    let has_type = headers
-        .iter()
-        .any(|(k, _)| k.eq_ignore_ascii_case("content-type"));
-    if !body.is_empty() && !has_type {
-        let json = body.starts_with('{') || body.starts_with('[');
-        headers.push((
-            "Content-Type".into(),
-            if json {
-                "application/json"
+    add_content_type(&mut headers, &body);
+    Some(Req {
+        method,
+        url,
+        headers,
+        body,
+    })
+}
+
+// ------------------------------------------------------------------------------------ curl
+
+/// Parte una orden de shell en palabras: comillas simples y dobles, `\` (bash) y `^` (cmd de
+/// Windows, como la copia «Copy as cURL (cmd)» de los navegadores), `$'…'` y líneas partidas.
+pub fn shell_words(text: &str) -> Vec<String> {
+    // cmd: `^` escapa el siguiente carácter y `^` al final de la línea la continúa.
+    let cmd = text.contains("^\"") || text.contains("^\n") || text.contains("^\r\n");
+    let text = if cmd {
+        let joined = text.replace("^\r\n", " ").replace("^\n", " ");
+        let mut out = String::with_capacity(joined.len());
+        let mut chars = joined.chars();
+        while let Some(c) = chars.next() {
+            if c == '^' {
+                if let Some(n) = chars.next() {
+                    out.push(n);
+                }
             } else {
-                "text/plain; charset=utf-8"
+                out.push(c);
+            }
+        }
+        out
+    } else {
+        text.replace("\\\r\n", " ").replace("\\\n", " ")
+    };
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    let mut in_word = false;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            c if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut cur));
+                    in_word = false;
+                }
+            }
+            '\'' => {
+                in_word = true;
+                for c in chars.by_ref() {
+                    if c == '\'' {
+                        break;
+                    }
+                    cur.push(c);
+                }
+            }
+            '$' if chars.peek() == Some(&'\'') => {
+                chars.next();
+                in_word = true;
+                while let Some(c) = chars.next() {
+                    match c {
+                        '\'' => break,
+                        '\\' => match chars.next() {
+                            Some('n') => cur.push('\n'),
+                            Some('t') => cur.push('\t'),
+                            Some('r') => cur.push('\r'),
+                            Some(o) => cur.push(o),
+                            None => {}
+                        },
+                        o => cur.push(o),
+                    }
+                }
+            }
+            '"' => {
+                in_word = true;
+                while let Some(c) = chars.next() {
+                    match c {
+                        '"' => break,
+                        '\\' if matches!(chars.peek(), Some('"' | '\\' | '$' | '`')) => {
+                            if let Some(n) = chars.next() {
+                                cur.push(n);
+                            }
+                        }
+                        o => cur.push(o),
+                    }
+                }
+            }
+            '\\' => {
+                in_word = true;
+                if let Some(n) = chars.next() {
+                    cur.push(n);
+                }
+            }
+            o => {
+                in_word = true;
+                cur.push(o);
+            }
+        }
+    }
+    if in_word {
+        words.push(cur);
+    }
+    words
+}
+
+/// Opciones de curl que llevan un valor que aquí no se usa (se salta).
+const CURL_SKIP_VALUE: &[&str] = &[
+    "-o",
+    "--output",
+    "-m",
+    "--max-time",
+    "--connect-timeout",
+    "-w",
+    "--write-out",
+    "-x",
+    "--proxy",
+    "-U",
+    "--proxy-user",
+    "--retry",
+    "-c",
+    "--cookie-jar",
+    "--cacert",
+    "--cert",
+    "-E",
+    "--key",
+    "-r",
+    "--range",
+    "-T",
+    "--upload-file",
+    "-K",
+    "--config",
+    "--resolve",
+    "--limit-rate",
+    "--max-redirs",
+    "-F",
+    "--form",
+];
+
+/// Percent-encoding de un valor de query o formulario.
+fn encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            b' ' => out.push_str("%20"),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Interpreta una orden `curl` pegada: método, dirección, cabeceras, cuerpo y usuario.
+pub fn parse_curl(text: &str) -> Option<HttpForm> {
+    let words = shell_words(text.trim());
+    let mut it = words.into_iter().peekable();
+    let first = it.next()?;
+    let exe = first.to_ascii_lowercase();
+    if exe != "curl" && exe != "curl.exe" {
+        return None;
+    }
+    let mut method: Option<String> = None;
+    let mut url: Option<String> = None;
+    let mut headers: Vec<String> = Vec::new();
+    let mut data: Vec<String> = Vec::new();
+    let mut auth = String::new();
+    let mut get = false;
+    let mut head = false;
+    let mut json = false;
+    while let Some(w) = it.next() {
+        // `--opcion=valor` y `-Xvalor`.
+        let (flag, attached) =
+            if let Some((f, v)) = w.split_once('=').filter(|_| w.starts_with("--")) {
+                (f.to_owned(), Some(v.to_owned()))
+            } else if w.len() > 2
+                && !w.starts_with("--")
+                && w.get(..2)
+                    .is_some_and(|p| ["-X", "-H", "-d", "-u", "-A", "-b", "-e"].contains(&p))
+            {
+                (w[..2].to_owned(), Some(w[2..].to_owned()))
+            } else {
+                (w.clone(), None)
+            };
+        let value = |it: &mut std::iter::Peekable<std::vec::IntoIter<String>>| {
+            attached.clone().or_else(|| it.next()).unwrap_or_default()
+        };
+        match flag.as_str() {
+            "-X" | "--request" => method = Some(value(&mut it).to_ascii_uppercase()),
+            "-H" | "--header" => headers.push(value(&mut it)),
+            "-d" | "--data" | "--data-raw" | "--data-binary" | "--data-ascii" => {
+                data.push(value(&mut it));
+            }
+            "--data-urlencode" => {
+                let v = value(&mut it);
+                data.push(match v.split_once('=') {
+                    Some((k, v)) => format!("{k}={}", encode(v)),
+                    None => encode(&v),
+                });
+            }
+            "--json" => {
+                data.push(value(&mut it));
+                json = true;
+            }
+            "-u" | "--user" => auth = value(&mut it),
+            "-A" | "--user-agent" => headers.push(format!("User-Agent: {}", value(&mut it))),
+            "-b" | "--cookie" => headers.push(format!("Cookie: {}", value(&mut it))),
+            "-e" | "--referer" => headers.push(format!("Referer: {}", value(&mut it))),
+            "--url" => url = Some(value(&mut it)),
+            "-G" | "--get" => get = true,
+            "-I" | "--head" => head = true,
+            f if CURL_SKIP_VALUE.contains(&f) => {
+                if attached.is_none() {
+                    it.next();
+                }
+            }
+            f if f.starts_with('-') && f.len() > 1 => {}
+            _ => {
+                if url.is_none() {
+                    url = Some(w);
+                }
+            }
+        }
+    }
+    fn has(headers: &[String], name: &str) -> bool {
+        headers.iter().any(|h| {
+            h.split(':')
+                .next()
+                .is_some_and(|k| k.trim().eq_ignore_ascii_case(name))
+        })
+    }
+    if json {
+        if !has(&headers, "content-type") {
+            headers.push("Content-Type: application/json".into());
+        }
+        if !has(&headers, "accept") {
+            headers.push("Accept: application/json".into());
+        }
+    }
+    let mut url = url?;
+    let joined = data.join("&");
+    // Con -G los datos (ya codificados) van a la query.
+    let body = if get {
+        if !joined.is_empty() {
+            let sep = if url.contains('?') { '&' } else { '?' };
+            url = format!("{url}{sep}{joined}");
+        }
+        String::new()
+    } else {
+        joined
+    };
+    if !body.is_empty() && !has(&headers, "content-type") {
+        // curl -d manda formularios por defecto.
+        let looks_json = serde_json::from_str::<serde_json::Value>(&body)
+            .is_ok_and(|v| v.is_object() || v.is_array());
+        headers.push(
+            if looks_json {
+                "Content-Type: application/json"
+            } else {
+                "Content-Type: application/x-www-form-urlencoded"
             }
             .into(),
-        ));
+        );
     }
-    Some(Req {
+    let method = method.unwrap_or_else(|| {
+        if head {
+            "HEAD"
+        } else if body.is_empty() {
+            "GET"
+        } else {
+            "POST"
+        }
+        .into()
+    });
+    Some(HttpForm {
+        method,
+        url,
+        headers: headers.join("\n"),
+        body,
+        auth,
+        params: String::new(),
+    })
+}
+
+/// Formulario a partir de lo que se escribe o pega en la barra: una orden `curl` o la sintaxis
+/// corta (`post 3000/x {"a":1}`).
+pub fn form_from_text(text: &str) -> Option<HttpForm> {
+    let t = text.trim();
+    let lower = t.to_ascii_lowercase();
+    if lower.starts_with("curl ") || lower.starts_with("curl.exe ") {
+        return parse_curl(t);
+    }
+    parse(None, t).map(|r| r.to_form())
+}
+
+/// Cabecera `Authorization` a partir de la pestaña Auth.
+fn auth_header(auth: &str) -> Option<String> {
+    let a = auth.trim();
+    if a.is_empty() {
+        return None;
+    }
+    let b64 = |s: &str| base64::engine::general_purpose::STANDARD.encode(s.as_bytes());
+    if let Some(rest) = a
+        .strip_prefix("Basic ")
+        .or_else(|| a.strip_prefix("basic "))
+    {
+        let rest = rest.trim();
+        return Some(if rest.contains(':') {
+            format!("Basic {}", b64(rest))
+        } else {
+            format!("Basic {rest}")
+        });
+    }
+    if a.contains(char::is_whitespace) {
+        // `Bearer x`, `Token x`…
+        return Some(a.to_owned());
+    }
+    Some(if a.contains(':') {
+        format!("Basic {}", b64(a))
+    } else {
+        format!("Bearer {a}")
+    })
+}
+
+/// Construye la petición a partir del formulario: completa la dirección, añade los parámetros,
+/// la autenticación y el `Content-Type`.
+pub fn build(form: &HttpForm) -> Result<Req, String> {
+    let mut url = normalize_url(&form.url).ok_or_else(|| tr("http.bad_url").to_owned())?;
+    let params: Vec<String> = form
+        .params
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(|l| match l.split_once('=') {
+            Some((k, v)) => format!("{}={}", encode(k.trim()), encode(v.trim())),
+            None => encode(l),
+        })
+        .collect();
+    if !params.is_empty() {
+        let (base, frag) = url
+            .split_once('#')
+            .map_or((url.as_str(), None), |(b, f)| (b, Some(f)));
+        let sep = if base.contains('?') { '&' } else { '?' };
+        let mut u = format!("{base}{sep}{}", params.join("&"));
+        if let Some(f) = frag {
+            u.push('#');
+            u.push_str(f);
+        }
+        url = u;
+    }
+    let mut headers = Vec::new();
+    for line in form.headers.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (k, v) = line
+            .split_once(':')
+            .ok_or_else(|| trf("http.bad_header", &[("line", &line)]))?;
+        headers.push((k.trim().to_owned(), v.trim().to_owned()));
+    }
+    if let Some(a) = auth_header(&form.auth)
+        && !headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+    {
+        headers.push(("Authorization".into(), a));
+    }
+    let body = if form.body.trim().is_empty() {
+        String::new()
+    } else {
+        form.body.clone()
+    };
+    let method = match form.method.trim() {
+        "" if body.is_empty() => "GET".to_owned(),
+        "" => "POST".to_owned(),
+        m => m.to_ascii_uppercase(),
+    };
+    add_content_type(&mut headers, &body);
+    Ok(Req {
         method,
         url,
         headers,
@@ -216,7 +616,8 @@ fn clip(mut s: String, max: usize) -> String {
 
 #[derive(Debug, Clone)]
 struct Entry {
-    req: Req,
+    form: HttpForm,
+    label: String,
     status: Option<u32>,
     ms: u128,
     at: Instant,
@@ -234,16 +635,79 @@ impl HttpPlugin {
         Self::default()
     }
 
-    fn remember(&self, req: &Req, status: Option<u32>, ms: u128) {
+    fn remember(&self, form: &HttpForm, req: &Req, status: Option<u32>, ms: u128) {
         let mut h = self.history.lock().unwrap_or_else(|p| p.into_inner());
-        h.retain(|e| e.req != *req);
+        h.retain(|e| e.form != *form);
         h.push_front(Entry {
-            req: req.clone(),
+            form: form.clone(),
+            label: req.label(),
             status,
             ms,
             at: Instant::now(),
         });
         h.truncate(HISTORY);
+    }
+
+    /// Peticiones recientes, la última primero.
+    pub fn history(&self) -> Vec<HttpForm> {
+        self.history
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .map(|e| e.form.clone())
+            .collect()
+    }
+
+    /// Envía la petición del formulario (bloqueante) y la guarda en el historial.
+    pub fn send(&self, form: &HttpForm) -> Result<HttpResponse, String> {
+        let req = build(form)?;
+        let t = Instant::now();
+        let r = rukes_platform::http::send(&rukes_platform::http::Request {
+            method: &req.method,
+            url: &req.url,
+            headers: &req.headers,
+            body: req.body.as_bytes(),
+            timeout: TIMEOUT,
+            max_bytes: MAX_BYTES,
+        });
+        let ms = t.elapsed().as_millis();
+        let resp = match r {
+            Ok(resp) => resp,
+            Err(e) => {
+                self.remember(form, &req, None, ms);
+                return Err(format!("{}: {e}", tr("http.failed")));
+            }
+        };
+        self.remember(form, &req, Some(resp.status), ms);
+        let content_type = resp
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            .map(|(_, v)| v.to_ascii_lowercase())
+            .unwrap_or_default();
+        Ok(HttpResponse {
+            status: resp.status,
+            reason: resp.reason.trim().to_owned(),
+            ms,
+            size: resp.body.len(),
+            truncated: resp.truncated,
+            headers: resp
+                .headers
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            body: clip(body_text(&resp.body, &content_type), MAX_SHOWN),
+            content_type,
+            curl: req.to_curl(),
+        })
+    }
+
+    fn open_item(form: HttpForm, send: bool) -> ActionOutcome {
+        ActionOutcome::OpenHttp {
+            form: Box::new(form),
+            send,
+        }
     }
 
     fn request_item(req: &Req) -> ResultItem {
@@ -258,138 +722,31 @@ impl HttpPlugin {
         it.subtitle = parts.join(" · ");
         it.icon = Icon::Named("http".into());
         it.fuzzy = 1.0;
-        it.payload = serde_json::to_string(req).unwrap_or_default();
+        it.payload = serde_json::to_string(&req.to_form()).unwrap_or_default();
         it.detail = Some(req.to_curl());
         it
     }
 
-    fn history_items(&self) -> Vec<ResultItem> {
+    fn list_items(&self) -> Vec<ResultItem> {
+        let mut open = ResultItem::new("open", tr("http.open"));
+        open.subtitle = tr("http.open_sub").into();
+        open.icon = Icon::Named("http".into());
+        open.fuzzy = 1.0;
+        open.payload = serde_json::to_string(&HttpForm::default()).unwrap_or_default();
+        let mut out = vec![open];
         let h = self.history.lock().unwrap_or_else(|p| p.into_inner());
-        h.iter()
-            .enumerate()
-            .map(|(i, e)| {
-                let mut it = Self::request_item(&e.req);
-                it.id = format!("hist:{i}");
-                let ago = e.at.elapsed().as_secs() / 60;
-                let status = e.status.map_or_else(|| "—".to_owned(), |s| s.to_string());
-                it.subtitle = trf(
-                    "http.history_sub",
-                    &[("status", &status), ("ms", &e.ms), ("min", &ago)],
-                );
-                it.fuzzy = 1.0 - i as f32 * 0.001;
-                it
-            })
-            .collect()
-    }
-
-    /// Envía la petición y prepara los resultados de la respuesta.
-    fn send(&self, req: &Req) -> Vec<ResultItem> {
-        let t = Instant::now();
-        let r = rukes_platform::http::send(&rukes_platform::http::Request {
-            method: &req.method,
-            url: &req.url,
-            headers: &req.headers,
-            body: req.body.as_bytes(),
-            timeout: TIMEOUT,
-            max_bytes: MAX_BYTES,
-        });
-        let ms = t.elapsed().as_millis();
-        let payload = serde_json::to_string(req).unwrap_or_default();
-        let resp = match r {
-            Ok(resp) => resp,
-            Err(e) => {
-                self.remember(req, None, ms);
-                let mut it = ResultItem::new("res:status", tr("http.failed"));
-                it.subtitle = format!("{} · {e}", req.label());
-                it.icon = Icon::Named("error".into());
-                it.fuzzy = 1.0;
-                it.payload = payload;
-                it.detail = Some(format!("{}\n\n{e}\n\n{}", req.label(), tr("http.retry")));
-                return vec![it];
-            }
-        };
-        self.remember(req, Some(resp.status), ms);
-        let content_type = resp
-            .headers
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-            .map(|(_, v)| v.to_ascii_lowercase())
-            .unwrap_or_default();
-        let full = body_text(&resp.body, &content_type);
-        let body = clip(full.clone(), MAX_DETAIL);
-        let ok = (200..400).contains(&resp.status);
-        let mut sz = size(resp.body.len());
-        if resp.truncated {
-            sz.push('+');
-        }
-        let mut out = Vec::new();
-
-        let mut status = ResultItem::new(
-            "res:status",
-            format!("{} {} · {ms} ms · {sz}", resp.status, resp.reason).replace("  ", " "),
-        );
-        status.subtitle = format!("{} · {}", req.label(), tr("http.resend"));
-        status.icon = Icon::Named(if ok { "ok" } else { "error" }.into());
-        status.fuzzy = 1.0;
-        status.payload = payload;
-        status.detail = Some(body.clone());
-        status.expand = true;
-        out.push(status);
-
-        let first = body.lines().next().unwrap_or("").trim();
-        let mut b = ResultItem::new(
-            "res:body",
-            if first.is_empty() {
-                tr("http.empty_body").to_owned()
-            } else {
-                clip(first.to_owned(), 120)
-            },
-        );
-        b.subtitle = format!(
-            "{} · {} · {}",
-            tr("http.body"),
-            if content_type.is_empty() {
-                "—"
-            } else {
-                &content_type
-            },
-            tr("http.copy")
-        );
-        b.icon = Icon::Named("note".into());
-        b.fuzzy = 0.99;
-        b.detail = Some(body);
-        b.payload = full;
-        out.push(b);
-
-        let headers: String = resp
-            .headers
-            .iter()
-            .map(|(k, v)| format!("{k}: {v}\n"))
-            .collect();
-        let mut h = ResultItem::new(
-            "res:headers",
-            trf("http.headers_n", &[("n", &resp.headers.len())]),
-        );
-        h.subtitle = format!("{} · {}", content_type, tr("http.copy"));
-        h.icon = Icon::Named("log".into());
-        h.fuzzy = 0.98;
-        h.detail = Some(headers);
-        out.push(h);
-
-        let mut c = ResultItem::new("res:curl", tr("http.copy_curl"));
-        c.subtitle = req.to_curl();
-        c.icon = Icon::Named("shell".into());
-        c.fuzzy = 0.97;
-        c.detail = Some(req.to_curl());
-        out.push(c);
-
-        if req.method == "GET" {
-            let mut o = ResultItem::new("res:browser", tr("http.open_browser"));
-            o.subtitle = req.url.clone();
-            o.icon = Icon::Named("web".into());
-            o.fuzzy = 0.96;
-            o.payload = req.url.clone();
-            out.push(o);
+        for (i, e) in h.iter().enumerate() {
+            let mut it = ResultItem::new(format!("hist:{i}"), e.label.clone());
+            let ago = e.at.elapsed().as_secs() / 60;
+            let status = e.status.map_or_else(|| "—".to_owned(), |s| s.to_string());
+            it.subtitle = trf(
+                "http.history_sub",
+                &[("status", &status), ("ms", &e.ms), ("min", &ago)],
+            );
+            it.icon = Icon::Named("http".into());
+            it.fuzzy = 0.99 - i as f32 * 0.001;
+            it.payload = serde_json::to_string(&e.form).unwrap_or_default();
+            out.push(it);
         }
         out
     }
@@ -404,6 +761,7 @@ impl Plugin for HttpPlugin {
             keywords: KEYWORDS
                 .iter()
                 .chain(METHODS.iter())
+                .chain(["curl"].iter())
                 .map(|k| (*k).to_owned())
                 .collect(),
             priority: 0.5,
@@ -419,11 +777,21 @@ impl Plugin for HttpPlugin {
             .next()
             .map(str::to_ascii_lowercase)
             .unwrap_or_default();
+        if word == "curl" {
+            if let Some(form) = parse_curl(q.raw.trim())
+                && let Ok(req) = build(&form)
+            {
+                let mut it = Self::request_item(&req);
+                it.payload = serde_json::to_string(&form).unwrap_or_default();
+                sink(vec![it]);
+            }
+            return;
+        }
         let method = METHODS.contains(&word.as_str()).then_some(word.as_str());
         if q.text.trim().is_empty() {
             // Con un método solo no se lista nada: «delete» puede ser otra cosa.
             if method.is_none() {
-                sink(self.history_items());
+                sink(self.list_items());
             }
             return;
         }
@@ -436,30 +804,11 @@ impl Plugin for HttpPlugin {
         if action != ActionId::OPEN {
             return Err(PluginError::UnsupportedAction(action.into()));
         }
-        let copy = |text: &str| -> Result<ActionOutcome, PluginError> {
-            rukes_platform::clipboard::set_text(text)
-                .map_err(|e| PluginError::Failed(e.to_string()))?;
-            Ok(ActionOutcome::Notify(tr("http.copied").to_owned()))
-        };
-        match item.id.as_str() {
-            "res:body" => copy(&item.payload),
-            "res:headers" | "res:curl" => copy(item.detail.as_deref().unwrap_or("")),
-            "res:browser" => {
-                rukes_platform::shell::launch(
-                    &item.payload,
-                    None,
-                    None,
-                    rukes_platform::shell::Verb::Open,
-                )
-                .map_err(|e| PluginError::Failed(e.to_string()))?;
-                Ok(ActionOutcome::Hide)
-            }
-            _ => {
-                let req: Req = serde_json::from_str(&item.payload)
-                    .map_err(|e| PluginError::Failed(e.to_string()))?;
-                Ok(ActionOutcome::ShowResults(self.send(&req)))
-            }
-        }
+        let form: HttpForm =
+            serde_json::from_str(&item.payload).map_err(|e| PluginError::Failed(e.to_string()))?;
+        // Lo escrito se envía; el historial y «abrir» solo cargan la petición (puede ser un
+        // DELETE o un POST que no conviene repetir sin mirar).
+        Ok(Self::open_item(form, item.id == "send"))
     }
 }
 
@@ -487,6 +836,7 @@ mod tests {
             "puerto no válido: se trata como host"
         );
         assert!(normalize_url("  ").is_none());
+        assert!(normalize_url("dos palabras").is_none());
     }
 
     #[test]
@@ -524,6 +874,110 @@ mod tests {
     }
 
     #[test]
+    fn pasted_curl_fills_everything() {
+        // bash, como lo copian los navegadores.
+        let f = parse_curl(
+            "curl 'https://api.x.com/v1/users?page=2' \\\n  -X 'PUT' \\\n  -H 'accept: application/json' \\\n  -H 'authorization: Bearer abc' \\\n  --data-raw '{\"name\":\"Ana López\"}' \\\n  --compressed",
+        )
+        .unwrap();
+        assert_eq!(f.method, "PUT");
+        assert_eq!(f.url, "https://api.x.com/v1/users?page=2");
+        assert_eq!(
+            f.headers,
+            "accept: application/json\nauthorization: Bearer abc\nContent-Type: application/json"
+        );
+        assert_eq!(f.body, r#"{"name":"Ana López"}"#);
+
+        // cmd de Windows («Copy as cURL (cmd)»).
+        let f = parse_curl(
+            "curl ^\"https://x.com/api^\" ^\n  -H ^\"content-type: application/json^\" ^\n  --data-raw ^\"^{^\\^\"a^\\^\":1^}^\"",
+        )
+        .unwrap();
+        assert_eq!(
+            (f.method.as_str(), f.url.as_str()),
+            ("POST", "https://x.com/api")
+        );
+        assert_eq!(f.body, r#"{"a":1}"#);
+        assert_eq!(f.headers, "content-type: application/json");
+
+        // Formulario, usuario, -G, opciones pegadas y desconocidas.
+        let f = parse_curl(
+            r#"curl -sSL -u ana:secreta -G --data-urlencode "q=hola mundo" -d n=1 -m 10 -XGET "http://localhost:3000/buscar""#,
+        )
+        .unwrap();
+        assert_eq!(f.method, "GET");
+        assert_eq!(f.url, "http://localhost:3000/buscar?q=hola%20mundo&n=1");
+        assert_eq!(f.auth, "ana:secreta");
+        assert!(f.body.is_empty() && f.params.is_empty());
+        let f = parse_curl("curl -d a=1 -d b=2 --url=3000/x").unwrap();
+        assert_eq!((f.method.as_str(), f.body.as_str()), ("POST", "a=1&b=2"));
+        assert!(f.headers.contains("x-www-form-urlencoded"));
+        let f = parse_curl(r#"curl --json '{"a":1}' 3000"#).unwrap();
+        assert!(f.headers.contains("Accept: application/json"));
+        assert_eq!(parse_curl("curl -I example.com").unwrap().method, "HEAD");
+        assert!(parse_curl("wget x").is_none());
+        assert!(parse_curl("curl -s").is_none());
+        // La barra acepta curl y la sintaxis corta.
+        assert_eq!(form_from_text("curl 3000").unwrap().url, "3000");
+        let f = form_from_text("post 3000/x {\"a\":1}").unwrap();
+        assert_eq!(f.method, "POST");
+        assert_eq!(f.url, "http://localhost:3000/x");
+    }
+
+    #[test]
+    fn form_builds_the_request() {
+        let form = HttpForm {
+            method: String::new(),
+            url: "3000/u?x=1#top".into(),
+            headers: "X-A: 1\n\n# comentario\n  Accept : text/html  ".into(),
+            body: "{\"a\": 1}".into(),
+            auth: "ana:secreta".into(),
+            params: "q=hola mundo\nvacío".into(),
+        };
+        let r = build(&form).unwrap();
+        assert_eq!(r.method, "POST");
+        assert_eq!(
+            r.url,
+            "http://localhost:3000/u?x=1&q=hola%20mundo&vac%C3%ADo#top"
+        );
+        assert_eq!(
+            r.headers,
+            vec![
+                ("X-A".into(), "1".into()),
+                ("Accept".into(), "text/html".into()),
+                ("Authorization".into(), "Basic YW5hOnNlY3JldGE=".into()),
+                ("Content-Type".into(), "application/json".into()),
+            ]
+        );
+        let auth = |a: &str| auth_header(a);
+        assert_eq!(auth("tok123").unwrap(), "Bearer tok123");
+        assert_eq!(auth("Bearer x").unwrap(), "Bearer x");
+        assert_eq!(auth("Basic YQ==").unwrap(), "Basic YQ==");
+        assert_eq!(auth("basic a:b").unwrap(), "Basic YTpi");
+        assert!(auth("  ").is_none());
+        // Una cabecera Authorization escrita gana a la pestaña Auth.
+        let r = build(&HttpForm {
+            url: "3000".into(),
+            headers: "Authorization: Token y".into(),
+            auth: "x".into(),
+            method: "get".into(),
+            ..HttpForm::default()
+        })
+        .unwrap();
+        assert_eq!(r.method, "GET");
+        assert_eq!(r.headers, vec![("Authorization".into(), "Token y".into())]);
+        assert!(build(&HttpForm::default()).is_err());
+        assert!(
+            build(&HttpForm {
+                url: "3000".into(),
+                headers: "sin dos puntos".into(),
+                ..HttpForm::default()
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
     fn curl_and_sizes() {
         let r = parse(None, r#"post 3000/x {"a":"b"}"#).unwrap();
         assert_eq!(
@@ -534,6 +988,9 @@ mod tests {
         assert_eq!(size(1536), "1,5 KB");
         assert_eq!(body_text(br#"{"a":1}"#, ""), "{\n  \"a\": 1\n}");
         assert!(body_text(&[0, 159, 146, 150], "image/png").contains("B"));
+        // Lo escrito con curl vuelve a la misma petición.
+        let f = parse_curl(&r.to_curl()).unwrap();
+        assert_eq!(build(&f).unwrap(), r);
     }
 
     #[test]
@@ -565,35 +1022,74 @@ mod tests {
             String::from_utf8_lossy(&buf[..n]).into_owned()
         });
         let p = HttpPlugin::new();
-        let req = parse(Some("post"), &format!("{port}/items {{\"n\":1}}")).unwrap();
-        let items = p.send(&req);
+        let form = HttpForm {
+            method: "POST".into(),
+            url: format!("{port}/items"),
+            body: "{\"n\":1}".into(),
+            auth: "tok".into(),
+            ..HttpForm::default()
+        };
+        let r = p.send(&form).unwrap();
         let seen = server.join().unwrap();
         assert!(seen.starts_with("POST /items HTTP/1.1"), "{seen}");
         assert!(seen.contains("Content-Type: application/json"));
-        assert!(
-            items[0].title.starts_with("201 Created · "),
-            "{}",
-            items[0].title
-        );
-        assert!(items[0].expand);
-        assert!(items[0].detail.as_deref().unwrap().contains("\"items\": ["));
-        assert_eq!(items[2].title, trf("http.headers_n", &[("n", &3)]));
-        assert!(
-            !items.iter().any(|i| i.id == "res:browser"),
-            "solo para GET"
-        );
-        // Queda en el historial y se puede repetir.
-        let hist = p.history_items();
-        assert_eq!(hist.len(), 1);
-        assert_eq!(hist[0].title, format!("POST http://localhost:{port}/items"));
+        assert!(seen.contains("Authorization: Bearer tok"));
+        assert_eq!((r.status, r.reason.as_str()), (201, "Created"));
+        assert!(r.body.contains("\"items\": ["), "{}", r.body);
+        assert_eq!(r.size, 25);
+        assert_eq!(r.content_type, "application/json");
+        assert!(r.headers.contains("Content-Length: 25"));
+        assert!(r.curl.starts_with("curl -X POST"));
+        // Queda en el historial.
+        assert_eq!(p.history(), vec![form]);
     }
 
     #[test]
-    fn connection_errors_become_a_retry_item() {
+    fn launcher_items_open_the_window() {
+        let _ = rukes_core::i18n::set_language("es", "");
         let p = HttpPlugin::new();
-        let items = p.send(&parse(None, "http://127.0.0.1:9/").unwrap());
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].id, "res:status");
-        assert!(!items[0].payload.is_empty());
+        let q = |raw: &str, text: &str| Query {
+            id: rukes_core::QueryId(1),
+            raw: raw.into(),
+            text: text.into(),
+            targeted: true,
+        };
+        let mut got = Vec::new();
+        p.query(&q("http ", ""), &CancelToken::default(), &mut |v| got = v);
+        assert_eq!(got[0].id, "open");
+        assert!(matches!(
+            p.execute(&got[0], ActionId::OPEN).unwrap(),
+            ActionOutcome::OpenHttp { send: false, .. }
+        ));
+        p.query(
+            &q("post 3000/x {}", "3000/x {}"),
+            &CancelToken::default(),
+            &mut |v| got = v,
+        );
+        match p.execute(&got[0], ActionId::OPEN).unwrap() {
+            ActionOutcome::OpenHttp { form, send } => {
+                assert!(send);
+                assert_eq!(form.method, "POST");
+                assert_eq!(form.url, "http://localhost:3000/x");
+            }
+            other => panic!("{other:?}"),
+        }
+        p.query(
+            &q("curl -X DELETE 3000/u/1", "-X DELETE 3000/u/1"),
+            &CancelToken::default(),
+            &mut |v| got = v,
+        );
+        assert_eq!(got[0].title, "DELETE http://localhost:3000/u/1");
+    }
+
+    #[test]
+    fn connection_errors_are_reported_and_remembered() {
+        let p = HttpPlugin::new();
+        let form = HttpForm {
+            url: "http://127.0.0.1:9/".into(),
+            ..HttpForm::default()
+        };
+        assert!(p.send(&form).is_err());
+        assert_eq!(p.history().len(), 1);
     }
 }

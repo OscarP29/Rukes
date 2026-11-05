@@ -224,6 +224,8 @@ pub enum Target {
     Workflow(String),
     /// Un script (por nombre, alias o archivo).
     Script(String),
+    /// Abrir el mini Postman (atajo `[plugins.http] hotkey`).
+    Http,
 }
 
 impl Target {

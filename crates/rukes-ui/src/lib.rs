@@ -6,6 +6,7 @@
 
 mod app;
 mod hints;
+mod http_panel;
 mod panel;
 mod theme;
 
@@ -15,7 +16,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use iced::futures::channel::mpsc;
-use rukes_core::{ActionOutcome, Icon, QueryBatch, QueryId, ResultItem};
+use rukes_core::{ActionOutcome, HttpForm, HttpResponse, Icon, QueryBatch, QueryId, ResultItem};
 
 /// Imagen RGBA de un icono: `(ancho, alto, píxeles)`.
 pub type IconRgba = (u32, u32, Vec<u8>);
@@ -62,6 +63,18 @@ pub trait Host: Send + Sync + 'static {
     }
     /// Abre `config.toml` en el editor.
     fn open_config_file(&self) {}
+    /// Envía una petición del mini Postman (bloqueante) y la guarda en el historial.
+    fn http_send(&self, _form: &HttpForm) -> Result<HttpResponse, String> {
+        Err("sin soporte".into())
+    }
+    /// Interpreta una orden `curl` (o `POST 3000/api {..}`) pegada en la barra.
+    fn http_parse(&self, _text: &str) -> Option<HttpForm> {
+        None
+    }
+    /// Peticiones recientes, la última primero.
+    fn http_history(&self) -> Vec<HttpForm> {
+        Vec::new()
+    }
 }
 
 /// Valor de un ajuste del panel visual.
@@ -292,6 +305,8 @@ pub enum UiEvent {
     Config(UiConfig),
     /// Abrir el panel de ajustes (desde la bandeja). La aplicación muestra antes la ventana.
     OpenSettings,
+    /// Abrir el mini Postman (atajo global). La aplicación muestra antes la ventana.
+    OpenHttp,
     /// Mensaje breve para el usuario (errores de config, avisos).
     Notice(String),
     /// Resultados del motor.

@@ -9,6 +9,7 @@ use iced::futures::channel::mpsc;
 use iced::futures::{SinkExt as _, StreamExt as _};
 use iced::keyboard::{self, Key, Modifiers, key::Named};
 use iced::widget::text::{Shaping, Wrapping};
+use iced::widget::text_editor;
 use iced::widget::{
     Id, button, column, container, image, mouse_area, operation, rich_text, row, space, span, text,
     text_input, tooltip,
@@ -18,8 +19,11 @@ use iced::{
     event, font, mouse, window,
 };
 use rukes_core::i18n::tr;
-use rukes_core::{ActionId, ActionOutcome, Icon, QueryBatch, QueryId, ResultItem, ranking};
+use rukes_core::{
+    ActionId, ActionOutcome, HttpForm, HttpResponse, Icon, QueryBatch, QueryId, ResultItem, ranking,
+};
 
+use crate::http_panel::{self, CopyWhat, Focus, HttpPanel};
 use crate::panel::{self, Panel};
 use crate::theme::{self, Look};
 use crate::{
@@ -80,6 +84,26 @@ pub(crate) enum Message {
     PanelSaved(Result<(), String>),
     PanelClose,
     PanelOpenFile,
+    /// Mini Postman: método elegido.
+    HttpMethod(usize),
+    /// Mini Postman: texto de la barra.
+    HttpUrl(String),
+    /// Mini Postman: enviar.
+    HttpSend,
+    /// Mini Postman: respuesta de la petición número `u64`.
+    HttpDone(u64, Result<HttpResponse, String>),
+    /// Mini Postman: pestaña elegida.
+    HttpTab(usize),
+    /// Mini Postman: edición en una pestaña.
+    HttpEdit(usize, text_editor::Action),
+    /// Mini Postman: selección o desplazamiento en la respuesta.
+    HttpView(text_editor::Action),
+    /// Mini Postman: copiar.
+    HttpCopy(CopyWhat),
+    /// Mini Postman: cuerpo o cabeceras de la respuesta.
+    HttpToggleView,
+    /// Mini Postman: cerrar y volver a la búsqueda.
+    HttpClose,
 }
 
 /// Previsualización con la imagen ya convertida para iced.
@@ -148,6 +172,8 @@ struct State {
     hovered: Option<usize>,
     /// Panel de ajustes abierto.
     panel: Option<Panel>,
+    /// Mini Postman abierto.
+    http: Option<HttpPanel>,
     /// Tema de iced con los colores del tema de Rukes (listas, interruptores, deslizadores).
     theme: Theme,
 }
@@ -226,11 +252,15 @@ impl State {
     fn hints_visible(&self) -> bool {
         self.cfg.hints
             && self.panel.is_none()
+            && self.http.is_none()
             && self.results.is_empty()
             && self.query.trim().is_empty()
     }
 
     fn width(&self) -> f32 {
+        if self.http.is_some() {
+            return self.cfg.width.max(http_panel::MIN_WIDTH);
+        }
         if self.panel.is_some() {
             return self.cfg.width.max(panel::MIN_WIDTH);
         }
@@ -242,6 +272,11 @@ impl State {
     }
 
     fn height(&self) -> f32 {
+        if let Some(p) = &self.http {
+            return p
+                .height(self.look.search_h, (self.look.small() * 1.3).ceil())
+                .round();
+        }
         if self.panel.is_some() {
             return panel::height(self.look.search_h).round();
         }
@@ -415,7 +450,152 @@ impl State {
         self.select_anim = None;
         self.hovered = None;
         self.panel = None;
+        self.http = None;
         self.host.hide();
+    }
+
+    /// Abre el mini Postman, con una petición ya rellena si viene de la búsqueda.
+    fn open_http(&mut self, form: Option<HttpForm>, send: bool) -> Task<Message> {
+        let mut p = HttpPanel::new(self.host.http_history());
+        if let Some(f) = &form {
+            p.load(f);
+        }
+        self.panel = None;
+        self.select_anim = None;
+        self.hovered = None;
+        self.http = Some(p);
+        let mut tasks = vec![
+            self.resize(),
+            operation::focus(http_panel::url_id()),
+            operation::move_cursor_to_end(http_panel::url_id()),
+        ];
+        if send {
+            tasks.push(self.http_send());
+        }
+        Task::batch(tasks)
+    }
+
+    /// Cierra el mini Postman y vuelve a la búsqueda.
+    fn close_http(&mut self) -> Task<Message> {
+        self.http = None;
+        Task::batch([self.resize(), operation::focus(input_id())])
+    }
+
+    /// Envía la petición del mini Postman en segundo plano.
+    fn http_send(&mut self) -> Task<Message> {
+        let host = Arc::clone(&self.host);
+        let Some(p) = &mut self.http else {
+            return Task::none();
+        };
+        if p.sending.is_some() {
+            return Task::none();
+        }
+        // Una orden `curl` o la sintaxis corta (`3000/api {..}`) escrita en la barra se
+        // interpreta antes de enviar.
+        let url = p.url.trim().to_owned();
+        let lower = url.to_ascii_lowercase();
+        if lower.starts_with("curl ") || lower.starts_with("curl.exe ") {
+            if let Some(f) = host.http_parse(&url) {
+                p.load(&f);
+            }
+        } else if url.contains(char::is_whitespace)
+            && let Some(f) = host.http_parse(&url)
+        {
+            p.merge(f);
+        }
+        let form = p.form();
+        if form.url.is_empty() {
+            p.flash = Some(tr("httpui.no_url").to_owned());
+            return Task::none();
+        }
+        p.seq += 1;
+        let seq = p.seq;
+        p.sending = Some(seq);
+        p.hist_pos = None;
+        p.draft = None;
+        p.flash = None;
+        let send = Task::perform(async move { host.http_send(&form) }, move |r| {
+            Message::HttpDone(seq, r)
+        });
+        Task::batch([send, self.resize()])
+    }
+
+    /// Teclas con el mini Postman abierto.
+    fn http_key(&mut self, key: &Key, m: Modifiers) -> Task<Message> {
+        let Some(p) = &mut self.http else {
+            return Task::none();
+        };
+        let ctrl = m.control();
+        match key.as_ref() {
+            Key::Named(Named::Escape) => self.close_http(),
+            Key::Named(Named::Enter) if ctrl || p.focus == Focus::Url => self.http_send(),
+            Key::Named(Named::Tab) => {
+                p.cycle_tab(m.shift());
+                let focus = if p.expanded {
+                    p.focus = Focus::Editor;
+                    operation::focus(http_panel::editor_id())
+                } else {
+                    p.focus = Focus::Url;
+                    operation::focus(http_panel::url_id())
+                };
+                Task::batch([focus, self.resize()])
+            }
+            Key::Named(Named::ArrowUp | Named::ArrowDown) if p.focus == Focus::Url && !ctrl => {
+                let older = matches!(key.as_ref(), Key::Named(Named::ArrowUp));
+                if p.browse(older) {
+                    Task::batch([
+                        self.resize(),
+                        operation::move_cursor_to_end(http_panel::url_id()),
+                    ])
+                } else {
+                    Task::none()
+                }
+            }
+            Key::Named(Named::PageUp | Named::PageDown) => {
+                let down = matches!(key.as_ref(), Key::Named(Named::PageDown));
+                p.view.perform(text_editor::Action::Scroll {
+                    lines: if down { 10 } else { -10 },
+                });
+                Task::none()
+            }
+            Key::Character(c) if ctrl => match c.to_ascii_lowercase().as_str() {
+                "m" => {
+                    p.cycle_method(m.shift());
+                    Task::none()
+                }
+                "l" => {
+                    p.focus = Focus::Url;
+                    Task::batch([
+                        operation::focus(http_panel::url_id()),
+                        operation::select_all(http_panel::url_id()),
+                    ])
+                }
+                "h" if m.shift() => self.http_copy(CopyWhat::Headers),
+                "h" => {
+                    p.show_headers = !p.show_headers;
+                    p.refresh_view();
+                    self.resize()
+                }
+                "c" if m.shift() => self.http_copy(CopyWhat::Body),
+                "x" if m.shift() => self.http_copy(CopyWhat::Curl),
+                _ => Task::none(),
+            },
+            _ => Task::none(),
+        }
+    }
+
+    /// Copia parte de la respuesta al portapapeles.
+    fn http_copy(&mut self, what: CopyWhat) -> Task<Message> {
+        let Some(p) = &mut self.http else {
+            return Task::none();
+        };
+        match p.copy_text(what) {
+            Some(t) => {
+                p.flash = Some(tr("httpui.copied").to_owned());
+                iced::clipboard::write(t)
+            }
+            None => Task::none(),
+        }
     }
 
     /// Pide el formulario de ajustes a la aplicación (el panel se abre al llegar).
@@ -552,6 +732,13 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 Task::batch([s.resize(), s.load_visible_icons(), s.load_preview()])
             }
             UiEvent::OpenSettings => s.open_settings(),
+            UiEvent::OpenHttp => {
+                if s.http.is_some() {
+                    operation::focus(http_panel::url_id())
+                } else {
+                    s.open_http(None, false)
+                }
+            }
             UiEvent::Notice(n) => {
                 s.notice = Some(n);
                 s.resize()
@@ -583,6 +770,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
             s.notice = None;
             s.run_query()
         }
+        Message::Key(key, m) if s.http.is_some() => s.http_key(&key, m),
         Message::Key(key, m) if s.panel.is_some() => match key.as_ref() {
             Key::Named(Named::Escape) => s.close_panel(),
             Key::Character("s") if m.control() => update(s, Message::PanelSave),
@@ -685,6 +873,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
         Message::OpenSettings => s.open_settings(),
         Message::PanelLoaded(form) => match form {
             Some(form) if s.visible => {
+                s.http = None;
                 s.panel = Some(Panel::new(form));
                 s.select_anim = None;
                 s.hovered = None;
@@ -744,6 +933,83 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
             s.host.open_config_file();
             Task::none()
         }
+        Message::HttpMethod(i) => {
+            if let Some(p) = &mut s.http {
+                p.method = i;
+            }
+            Task::none()
+        }
+        Message::HttpUrl(text) => {
+            let host = Arc::clone(&s.host);
+            let Some(p) = &mut s.http else {
+                return Task::none();
+            };
+            p.focus = Focus::Url;
+            p.hist_pos = None;
+            p.flash = None;
+            // Una orden `curl` pegada rellena método, dirección, cabeceras y cuerpo.
+            if http_panel::pasted_curl(&p.url, &text)
+                && let Some(f) = host.http_parse(&text)
+            {
+                p.load(&f);
+                return Task::batch([
+                    s.resize(),
+                    operation::move_cursor_to_end(http_panel::url_id()),
+                ]);
+            }
+            p.url = text;
+            Task::none()
+        }
+        Message::HttpSend => s.http_send(),
+        Message::HttpDone(seq, res) => {
+            let history = s.host.http_history();
+            let Some(p) = &mut s.http else {
+                return Task::none();
+            };
+            if p.sending != Some(seq) {
+                return Task::none();
+            }
+            p.history = history;
+            p.set_response(res);
+            s.resize()
+        }
+        Message::HttpTab(i) => {
+            let Some(p) = &mut s.http else {
+                return Task::none();
+            };
+            p.expanded = true;
+            p.tab = i.min(http_panel::TABS.len() - 1);
+            p.focus = Focus::Editor;
+            Task::batch([operation::focus(http_panel::editor_id()), s.resize()])
+        }
+        Message::HttpEdit(i, action) => {
+            if let Some(p) = &mut s.http
+                && let Some(ed) = p.editors.get_mut(i)
+            {
+                ed.perform(action);
+                p.focus = Focus::Editor;
+            }
+            Task::none()
+        }
+        Message::HttpView(action) => {
+            // Solo lectura: se puede seleccionar y desplazar, no escribir.
+            if let Some(p) = &mut s.http
+                && !action.is_edit()
+            {
+                p.view.perform(action);
+                p.focus = Focus::Response;
+            }
+            Task::none()
+        }
+        Message::HttpCopy(what) => s.http_copy(what),
+        Message::HttpToggleView => {
+            if let Some(p) = &mut s.http {
+                p.show_headers = !p.show_headers;
+                p.refresh_view();
+            }
+            s.resize()
+        }
+        Message::HttpClose => s.close_http(),
         Message::Scrolled(lines) => {
             let lines = if s.cfg.anchor_bottom { -lines } else { lines };
             let max_off = s.results.len().saturating_sub(s.cfg.max_results);
@@ -773,6 +1039,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 }
                 Ok(ActionOutcome::ShowResults(items)) => s.show_results(items),
                 Ok(ActionOutcome::OpenSettings) => s.open_settings(),
+                Ok(ActionOutcome::OpenHttp { form, send }) => s.open_http(Some(*form), send),
                 Ok(ActionOutcome::Paste {
                     text,
                     cursor_left,
@@ -1241,6 +1508,9 @@ fn view(s: &State) -> Element<'_, Message> {
     let fade = s.fade.map_or(1.0, |a| a.at(s.now));
     let l = s.look.faded(fade);
     let (fg, muted, accent) = (l.fg, l.muted, l.accent);
+    if let Some(p) = &s.http {
+        return frame(&l, http_panel::view(p, &l));
+    }
     if let Some(p) = &s.panel {
         return frame(&l, panel::view(p, &l, l.search_h));
     }
@@ -1411,6 +1681,7 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
             resize_anim: None,
             hovered: None,
             panel: None,
+            http: None,
             theme: iced_theme(&look),
         };
         let ready = window::oldest().then(|id| {

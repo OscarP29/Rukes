@@ -4,6 +4,21 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Mini Postman visual
+
+#### Añadido
+- Panel del mini Postman: una barra con el selector de método, la URL (o un `curl`) y «Enviar».
+  `Tab` lo despliega en pestañas Headers, Body, Auth y Params con editor monoespaciado; al enviar
+  muestra estado, tiempo y tamaño y el cuerpo con formato. Todo con el teclado: `Enter` /
+  `Ctrl+Enter` envían, `↑ ↓` recorren el historial, `Ctrl+M` cambia el método, `Ctrl+H` alterna
+  cuerpo y cabeceras, `Ctrl+Shift+C/H/X` copian cuerpo, cabeceras o curl, `Esc` cierra.
+- Pegar un `curl` (estilo bash o cmd, con continuaciones de línea) rellena método, URL, cabeceras
+  y cuerpo; entiende `-X`, `-H`, `-d` y variantes, `--json`, `-u`, `-G`, `-I`, `-A`, `-b`, `-e`.
+- `[plugins.http] hotkey`: atajo global que abre el panel (también en los ajustes).
+
+#### Cambiado
+- `http ...` abre el panel (y envía al pulsar Enter) en lugar de mostrar la respuesta como lista.
+
 ### Leyenda configurable, crear desde el launcher y borrar notas
 
 #### Añadido

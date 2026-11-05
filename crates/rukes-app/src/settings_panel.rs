@@ -282,6 +282,13 @@ pub fn form(c: &Config, themes: &[(String, String, bool)]) -> SettingsForm {
                 p.controls.enabled,
             ),
             toggle("plugins.http.enabled", "http.name", "", p.http.enabled),
+            SettingField {
+                key: "plugins.http.hotkey".into(),
+                label: tr("settings.http_hotkey").into(),
+                help: tr("settings.http_hotkey_help").into(),
+                kind: SettingKind::Text,
+                value: SettingValue::Text(p.http.hotkey.clone()),
+            },
             toggle(
                 "plugins.generators.enabled",
                 "generators.name",
@@ -365,6 +372,10 @@ pub fn edits(changes: &[(String, SettingValue)]) -> Result<Vec<(String, EditValu
                     if key == "general.hotkey" {
                         rukes_config::Hotkey::parse(t)
                             .map_err(|e| format!("{}: {e}", tr("settings.hotkey")))?;
+                    }
+                    if key == "plugins.http.hotkey" && !t.is_empty() {
+                        rukes_config::Hotkey::parse(t)
+                            .map_err(|e| format!("{}: {e}", tr("settings.http_hotkey")))?;
                     }
                     EditValue::Text(t.to_owned())
                 }

@@ -122,12 +122,35 @@ admin = false
 | `post 3000/login {"user":"ana"}` | `POST` con cuerpo JSON (`Content-Type` automático) |
 | `put 3000/u/1 -H "Authorization: Bearer x" {"a":1}` | Con cabeceras (`-H`, repetible) |
 | `http api.github.com/users/octocat` | Sin esquema: `https` (y `http` para localhost e IP) |
-| `http` | Historial de la sesión (Enter repite) |
+| `http` | Abre el panel vacío; debajo, el historial de la sesión |
+| `curl -X POST https://x.com -H 'A: b' -d '{}'` | Interpreta el curl (método, URL, cabeceras y cuerpo) |
 
-Nada se envía hasta pulsar Enter. La respuesta muestra estado, tiempo y tamaño, y el cuerpo
-(JSON formateado) en el panel de detalles. Enter sobre el estado repite la petición; sobre el
-cuerpo, las cabeceras o «Copiar como curl», los copia. El historial solo vive en memoria
-(puede contener tokens) y se borra al cerrar Rukes. `[plugins.http] enabled = false` lo quita.
+Nada se envía hasta pulsar Enter. Al pulsarlo se abre el **panel del mini Postman**: una barra
+con el método, la URL y «Enviar», que se maneja solo con el teclado:
+
+| Tecla | Hace |
+| --- | --- |
+| `Enter` (en la URL) / `Ctrl+Enter` (en cualquier sitio) | Envía |
+| `Tab` / `Shift+Tab` | Despliega y recorre Headers, Body, Auth y Params; tras la última se pliega |
+| `↑` / `↓` (en la URL) | Peticiones recientes; `↓` al final devuelve lo que estabas escribiendo |
+| `Ctrl+M` / `Ctrl+Shift+M` | Método siguiente / anterior |
+| `Ctrl+L` | Vuelve a la URL |
+| `Ctrl+H` | Respuesta: cuerpo ↔ cabeceras |
+| `Ctrl+Shift+C` / `Ctrl+Shift+H` / `Ctrl+Shift+X` | Copia el cuerpo / las cabeceras / la petición como curl |
+| `RePág` / `AvPág` | Desplaza la respuesta |
+| `Esc` | Cierra el panel y vuelve a la búsqueda |
+
+- Pegar una orden `curl` en la barra (también las copiadas de las herramientas del navegador,
+  con `\` o `^` al final de línea) rellena el método, la URL, las cabeceras y el cuerpo.
+- Headers: una por línea (`Nombre: valor`). Params: una por línea (`clave=valor`), se añaden a la
+  URL. Auth: `Bearer <token>`, `Basic usuario:clave`, `usuario:clave` o un token suelto.
+- La respuesta muestra arriba el estado (verde 2xx, azul 3xx, naranja 4xx, rojo 5xx), el tiempo
+  en ms y el tamaño, y debajo el cuerpo (JSON con sangrado), que se puede seleccionar.
+- `[plugins.http] hotkey = "ctrl+alt+p"` (o «Atajo del mini Postman» en los ajustes) abre el
+  panel directamente desde cualquier sitio.
+
+El historial solo vive en memoria (puede contener tokens) y se borra al cerrar Rukes.
+`[plugins.http] enabled = false` lo quita.
 
 ### Automatización
 

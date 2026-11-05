@@ -245,7 +245,7 @@ pub struct Plugins {
     /// Volumen, brillo, Wi-Fi, Bluetooth, modo avión y modo oscuro (RF-063).
     pub controls: PluginCommon,
     /// Peticiones HTTP (`http 3000/api`, `post :8080/login {...}`): un mini Postman.
-    pub http: PluginCommon,
+    pub http: Http,
     /// Generadores, hashes y codificadores.
     pub generators: Generators,
     /// Archivos y carpetas.
@@ -592,6 +592,28 @@ impl Default for PluginCommon {
         Self {
             enabled: true,
             priority: 0.0,
+        }
+    }
+}
+
+/// `[plugins.http]`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct Http {
+    /// Activo.
+    pub enabled: bool,
+    /// Prioridad: se suma a la puntuación (−1..1).
+    pub priority: f32,
+    /// Atajo global que abre el mini Postman (`ctrl+alt+p`). Vacío: ninguno.
+    pub hotkey: String,
+}
+
+impl Default for Http {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            priority: 0.0,
+            hotkey: String::new(),
         }
     }
 }

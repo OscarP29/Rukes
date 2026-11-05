@@ -705,6 +705,11 @@ impl AppHost {
                 }
             },
             Target::Script(name) => script(name),
+            Target::Http => {
+                self.toggle(true);
+                let _ = self.ui.unbounded_send(UiEvent::OpenHttp);
+                Ok(())
+            }
         };
         if let Err(e) = result {
             tracing::warn!(?target, error = %e, "no se pudo ejecutar");
@@ -731,6 +736,16 @@ impl AppHost {
         if let Some(p) = self.scripts_plugin.lock().ok().and_then(|p| p.clone()) {
             for (h, name) in p.hotkeys() {
                 wanted.push((h, Target::Script(name.clone()), name));
+            }
+        }
+        {
+            let http = &self.inner().config.plugins.http;
+            if http.enabled && !http.hotkey.trim().is_empty() {
+                wanted.push((
+                    http.hotkey.trim().to_owned(),
+                    Target::Http,
+                    tr("http.name").into(),
+                ));
             }
         }
         if self.paused.load(Ordering::SeqCst) {
@@ -1456,6 +1471,18 @@ impl Host for AppHost {
         rukes_config::edit::save(&self.paths.config_file(), &edits)?;
         tracing::info!(n = edits.len(), "ajustes guardados desde el panel");
         Ok(())
+    }
+
+    fn http_send(&self, form: &rukes_core::HttpForm) -> Result<rukes_core::HttpResponse, String> {
+        self.http.send(form)
+    }
+
+    fn http_parse(&self, text: &str) -> Option<rukes_core::HttpForm> {
+        rukes_plugins::http::form_from_text(text)
+    }
+
+    fn http_history(&self) -> Vec<rukes_core::HttpForm> {
+        self.http.history()
     }
 
     fn open_config_file(&self) {
