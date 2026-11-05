@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rukes · Documentación para desarrolladores</title>
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<nav>
+  <div class="brand">Rukes</div>
+  <div class="ver">Desarrolladores · cómo funciona por dentro</div>
+  <a class="switch" href="index.html">← Guía de usuario</a>
+  <div class="group">Visión general</div>
+  <a class="item" href="#arquitectura">Arquitectura</a>
+  <a class="item" href="#crates">Crates</a>
+  <a class="item" href="#arranque">Arranque</a>
+  <a class="item" href="#principios">Decisiones y reglas</a>
+  <div class="group">El motor</div>
+  <a class="item" href="#consulta">Flujo de una consulta</a>
+  <a class="item" href="#rutas">Enrutado</a>
+  <a class="item" href="#ranking">Puntuación y frecency</a>
+  <a class="item" href="#ejecutar">Ejecutar una acción</a>
+  <div class="group">Plugins</div>
+  <a class="item" href="#trait">El trait Plugin</a>
+  <a class="item" href="#plugin-rust">Escribir un plugin integrado</a>
+  <a class="item" href="#plugin-registro">Registrarlo</a>
+  <a class="item" href="#plugin-comandos">Comandos entre plugins</a>
+  <a class="item" href="#externos">Plugins externos por dentro</a>
+  <div class="group">Automatización</div>
+  <a class="item" href="#scripts">Motor de scripts</a>
+  <a class="item" href="#rhai">Sandbox de Rhai</a>
+  <a class="item" href="#workflows">Workflows</a>
+  <a class="item" href="#triggers">Triggers y atajos</a>
+  <div class="group">Aplicación</div>
+  <a class="item" href="#config">Configuración</a>
+  <a class="item" href="#temas">Temas y tokens</a>
+  <a class="item" href="#ui">Interfaz (iced)</a>
+  <a class="item" href="#teclado">Teclado por dentro</a>
+  <a class="item" href="#plataforma">rukes-platform</a>
+  <a class="item" href="#i18n">Textos e idiomas</a>
+  <a class="item" href="#persistencia">Persistencia</a>
+  <div class="group">Trabajar en el código</div>
+  <a class="item" href="#comandos-dev">Compilar y probar</a>
+  <a class="item" href="#recetas">Recetas</a>
+  <a class="item" href="#release">Publicar una versión</a>
+</nav>
+
+<main>
+
+<h1 id="arquitectura">Arquitectura</h1>
+<p class="lead">Cómo está hecho Rukes: qué hace cada crate, qué pasa entre que pulsas una tecla y
+ves un resultado, y cómo ampliarlo.</p>
+<p>Rukes es un ejecutable nativo de Windows en Rust (edición 2024). La interfaz usa
+<a href="https://iced.rs">iced</a> 0.14 con el renderizador por software
+<code>tiny-skia</code>; la concurrencia, hilos y canales (<code>crossbeam</code>), sin runtime
+async. Los plugins integrados son código Rust en el mismo proceso; los externos, procesos
+aparte que hablan JSON.</p>
+<div class="diagram">                     ┌──────────────────────────────┐
+  teclado / ratón ─▶ │  rukes-ui  (iced: State,     │ ◀── UiEvent (canal) ──┐
+                     │  Message, update, view)      │                        │
+                     └──────────────┬───────────────┘                        │
+                                    │ trait Host                             │
+                     ┌──────────────▼───────────────┐                        │
+                     │  rukes-app  (Host, bandeja,  │── ConfigWatcher ──────┤
+                     │  atajos, triggers, ajustes)  │── tray / hotkeys ─────┘
+                     └──────┬──────────────┬────────┘
+                            │              │
+              ┌─────────────▼───┐   ┌──────▼──────────┐   ┌─────────────────┐
+              │  rukes-core     │   │  rukes-config   │   │ rukes-platform  │
+              │  Engine, pool,  │   │  schema, temas, │   │ Win32: ventanas,│
+              │  ranking, i18n  │   │  watch, edición │   │ shell, iconos…  │
+              └───────┬─────────┘   └─────────────────┘   └─────────────────┘
+                      │ Vec&lt;Arc&lt;dyn Plugin&gt;&gt;
+     ┌────────────────┼─────────────────────┐
+┌────▼─────────┐ ┌────▼──────────┐ ┌────────▼───────┐
+│rukes-plugins │ │ rukes-script  │ │ externos (NDJSON│
+│apps, calc,   │ │ scripts, Rhai │ │ por stdin/stdout│
+│files, http…  │ │               │ │ en otro proceso)│
+└──────────────┘ └───────────────┘ └─────────────────┘</div>
+
+<h2 id="crates">Crates</h2>
+<table>
+  <tr><th>Crate</th><th>Responsabilidad</th><th>Depende de</th></tr>
+  <tr><td><code>rukes-core</code></td><td>Tipos comunes (<code>ResultItem</code>, <code>Action</code>, <code>Icon</code>, <code>Query</code>), el trait <code>Plugin</code>, el <code>Engine</code> (enrutado, pool de hilos, cancelación), ranking, frecency, búsqueda difusa (<code>nucleo-matcher</code>), i18n, ayuda, persistencia JSON atómica, tipos HTTP. Sin Win32.</td><td>—</td></tr>
+  <tr><td><code>rukes-config</code></td><td>Esquema de <code>config.toml</code> (serde + schemars), configuración por defecto comentada, rutas (<code>%APPDATA%</code>, portable), temas (<code>extends</code>, tokens), atajos, vigilancia de archivos, edición preservando comentarios (<code>toml_edit</code>), exportar/importar.</td><td>core</td></tr>
+  <tr><td><code>rukes-platform</code></td><td>Todo lo que toca Win32: ventanas, monitores, shell, iconos, portapapeles (y DPAPI), atajos globales, bandeja, instancia única, jobs de procesos, volumen/brillo/wifi, planes de energía, Everything, HTTP. Es el <b>único</b> crate con <code>unsafe</code>.</td><td>core</td></tr>
+  <tr><td><code>rukes-plugins</code></td><td>Plugins integrados (apps, files, calc, currency, color, web, shell, controls, windows, processes, generators, clipboard, snippets, notes/todo/remind, http, wall, help) y los subsistemas <code>external</code> (plugins por JSON) y <code>workflows</code> (workflows y triggers).</td><td>core, config, platform</td></tr>
+  <tr><td><code>rukes-script</code></td><td>Scripts del usuario: catálogo, cabeceras <code>@rukes.*</code>, argumentos, intérpretes, ejecución con job y timeout, script filters, historial de ejecuciones y la API de Rhai.</td><td>core, platform</td></tr>
+  <tr><td><code>rukes-ui</code></td><td>La ventana en iced: búsqueda, lista, leyenda, pie, vista previa, panel de ajustes, mini Postman. Solo conoce el trait <code>Host</code> y <code>UiEvent</code>.</td><td>core</td></tr>
+  <tr><td><code>rukes-app</code></td><td>El ejecutable: <code>main</code>, el <code>Host</code> que une todo, instalación de plugins según la configuración, bandeja, atajos, ajustes visuales, creación desde el launcher, caché de iconos, previsualización, logs.</td><td>todos</td></tr>
+</table>
+<div class="note"><b>Regla de dependencias:</b> <code>rukes-ui</code> no depende de
+<code>rukes-config</code> ni de <code>rukes-platform</code>. Todo lo que necesita del sistema
+(iconos, pegar, previsualizar, guardar ajustes, enviar HTTP) lo pide a través del trait
+<code>Host</code>. Así la interfaz se puede probar sin Windows.</div>
+
+<h2 id="arranque">Arranque</h2>
+<p><code>crates/rukes-app/src/main.rs</code>, en orden:</p>
+<ol>
+  <li><b>Opciones de línea de órdenes:</b> <code>--schema &lt;archivo&gt;</code> escribe el JSON
+    Schema; <code>--export</code> / <code>--import</code> copian la configuración. Terminan sin
+    abrir la ventana.</li>
+  <li><b>Rutas</b> (<code>rukes_config::paths</code>): <code>%APPDATA%\Rukes</code> y
+    <code>%LOCALAPPDATA%\Rukes</code>, o <code>data\</code> si existe <code>portable.txt</code>.</li>
+  <li><b>Logs</b> (<code>logging.rs</code>): <code>tracing</code> a archivo rotado;
+    <code>RUKES_LOG</code> fija el nivel.</li>
+  <li><b>Instancia única</b> (<code>instance::acquire</code>): si ya hay una, le pide que se
+    muestre y sale.</li>
+  <li><b>Configuración:</b> crea <code>config.toml</code> comentado si no existe, lo carga, escribe
+    <code>config.schema.json</code>, carga el idioma y el tema.</li>
+  <li><b>Host:</b> crea el <code>Engine</code> (pool con tantos hilos como núcleos, con tope), carga
+    la frecency y llama a <code>install_plugins</code>.</li>
+  <li><b>Vigilantes:</b> <code>ConfigWatcher</code> sobre <code>config.toml</code> y
+    <code>DirWatcher</code> sobre <code>themes</code>, <code>lang</code>, <code>scripts</code>,
+    <code>workflows</code> y <code>plugins</code>. Un cambio recarga solo lo afectado.</li>
+  <li><b>Bandeja, atajo global, atajos propios y triggers.</b></li>
+  <li><b><code>rukes_ui::run(host, ui_rx, ui_config)</code></b>: bucle de iced en el hilo
+    principal hasta salir. Al salir se guarda la frecency y se cierran los plugins externos.</li>
+</ol>
+
+<h2 id="principios">Decisiones y reglas</h2>
+<p>Las decisiones de arquitectura están en <code>docs/decisions/</code> (ADR):</p>
+<table>
+  <tr><th>ADR</th><th>Decisión</th></tr>
+  <tr><td>0001</td><td>iced + tiny-skia: binario pequeño, sin GPU obligatoria, arranque rápido.</td></tr>
+  <tr><td>0002</td><td>Edición 2024 y lints estrictos: <code>unwrap</code> y <code>expect</code> prohibidos fuera de tests; <code>#![forbid(unsafe_code)]</code> salvo en <code>rukes-platform</code>; <code>clippy -D warnings</code>.</td></tr>
+  <tr><td>0003</td><td>Hilos + crossbeam, sin tokio. Cada consulta tiene <code>QueryId</code> y <code>CancelToken</code>; una nueva cancela la anterior.</td></tr>
+  <tr><td>0004</td><td>Estado en JSON versionado con escritura atómica (archivo temporal + rename).</td></tr>
+</table>
+<p>Perfil release: <code>lto = "fat"</code>, <code>codegen-units = 1</code>, <code>panic = "unwind"</code>
+(para que <code>catch_unwind</code> aísle el pánico de un plugin).</p>
+<div class="tip">Con los mutex se usa siempre
+<code>.lock().unwrap_or_else(|p| p.into_inner())</code>: un pánico en otro hilo no envenena el
+resto de la aplicación.</div>
+
+<h1 id="consulta">Flujo de una consulta</h1>
+<div class="diagram">tecla ─▶ Message::Input(texto) ─▶ host.query(texto, sink) ─▶ Engine::query
+                                                                 │
+          ┌──────────────────────────────────────────────────────┘
+          │ 1. cancela el CancelToken de la consulta anterior
+          │ 2. QueryId nuevo
+          │ 3. route(plugins, texto) → [Route { plugin, text, targeted, boost }]
+          │ 4. un job por ruta al pool
+          ▼
+   hilo del pool: catch_unwind(|| plugin.query(&Query, &cancel, &mut |items| …))
+          │  cada vez que el plugin llama a sink(items):
+          │    · rellena plugin_id, alias_match
+          │    · score = ranking::final_score(fuzzy, frecency, alias, priority)
+          │    · envía QueryBatch { id, items } por el Sink
+          ▼
+   Host → UiEvent::Batch ─▶ rukes-ui: si batch.id == consulta actual
+                              ranking::merge(lista, items, max) → nueva vista</div>
+<ul>
+  <li>Los plugins pueden llamar a <code>sink</code> varias veces (resultados incrementales: los
+    archivos llegan por tandas). <code>merge</code> sustituye duplicados por
+    <code>(plugin_id, id)</code> y mantiene la lista ordenada.</li>
+  <li>Un plugin lento no bloquea a los demás: cada uno es un job independiente.</li>
+  <li>Un pánico dentro de <code>query</code> se captura, se registra en el log y no tumba el pool.</li>
+  <li>La UI descarta lotes de consultas viejas comparando el <code>QueryId</code>.</li>
+</ul>
+
+<h2 id="rutas">Enrutado</h2>
+<p><code>engine.rs::route</code> decide qué plugins reciben la consulta y con qué texto:</p>
+<ol>
+  <li><b>Prefijo:</b> si el texto empieza por el <code>prefix</code> de algún plugin, va solo a
+    ese, sin el prefijo. Gana el más largo (<code>f:</code> antes que <code>f</code>).</li>
+  <li><b>Palabra clave + espacio:</b> si empieza por una de sus <code>keywords</code> seguida de un
+    espacio, va solo a ese plugin (<code>g rust</code> → web con «rust»). Las palabras clave
+    pueden tener varias palabras (<code>gh issue</code>) y gana la más larga.</li>
+  <li><b>Global:</b> si no, va a todos los plugins con <code>global = true</code>, con
+    <code>targeted = false</code>.</li>
+  <li><b><code>list_on_keyword</code>:</b> si el texto es <i>exactamente</i> una palabra clave
+    (<code>clip</code> sin espacio), además de la búsqueda global ese plugin recibe una consulta
+    vacía dirigida y su lista sale arriba (<code>boost</code>).</li>
+</ol>
+<pre><code class="language-rust">// Query que recibe el plugin
+pub struct Query {
+    pub id: QueryId,     // para descartar resultados viejos
+    pub raw: String,     // lo que escribió el usuario
+    pub text: String,    // sin prefijo ni palabra clave, recortado
+    pub targeted: bool,  // true si se usó su prefijo o palabra clave
+}</code></pre>
+
+<h2 id="ranking">Puntuación y frecency</h2>
+<p><code>crates/rukes-core/src/ranking.rs</code>:</p>
+<pre><code class="language-rust">pub const ALIAS_BONUS: f32 = 1.0;
+const QUERY_FRECENCY_SHARE: f32 = 0.6;
+
+pub fn final_score(i: ScoreInput, frecency_weight: f32) -> f32 {
+    let w = frecency_weight.clamp(0.0, 1.0);
+    let frecency =
+        i.item_frecency * (1.0 - QUERY_FRECENCY_SHARE) + i.query_frecency * QUERY_FRECENCY_SHARE;
+    let alias = if i.alias_match { ALIAS_BONUS } else { 0.0 };
+    i.fuzzy * (1.0 - w) + frecency * w + alias + i.priority
+}</code></pre>
+<ul>
+  <li><b><code>fuzzy</code></b> (0..1): lo pone el plugin, normalmente con
+    <code>rukes_core::Fuzzy</code> (envoltorio de <code>nucleo-matcher</code>).</li>
+  <li><b>Frecency</b> (<code>frecency.rs</code>): cada vez que eliges un resultado se suma 1 a su
+    entrada general y a la de esa consulta normalizada; el valor decae exponencialmente con una
+    vida media configurable (<code>value · 0.5^(Δt / half_life)</code>) y se normaliza a 0..1.</li>
+  <li><b>Alias:</b> si el texto coincide exactamente con un alias del resultado, +1.</li>
+  <li><b>Prioridad</b> del plugin (−1..1, en <code>config.toml</code>).</li>
+  <li><b>Empates:</b> título (sin mayúsculas), luego <code>plugin_id</code>, luego <code>id</code>;
+    así la lista no «baila» entre pulsaciones.</li>
+</ul>
+
+<h2 id="ejecutar">Ejecutar una acción</h2>
+<p>Al pulsar <kbd>Enter</kbd> (o un atajo, o un botón de la fila) la UI llama a
+<code>host.execute(item, action_id)</code> → <code>Engine::execute</code>, que busca el plugin por
+<code>item.plugin_id</code>, apunta la elección en la frecency y llama a
+<code>plugin.execute(item, action)</code> dentro de <code>catch_unwind</code>. El resultado es un
+<code>ActionOutcome</code>:</p>
+<table>
+  <tr><th>Variante</th><th>Qué hace la UI</th></tr>
+  <tr><td><code>Hide</code></td><td>Oculta la ventana (según <code>hide_after_action</code>).</td></tr>
+  <tr><td><code>KeepOpen</code></td><td>No hace nada; vuelve a lanzar la consulta para refrescar.</td></tr>
+  <tr><td><code>ReplaceQuery(String)</code></td><td>Escribe ese texto en la búsqueda.</td></tr>
+  <tr><td><code>Notify(String)</code></td><td>Muestra un aviso breve y sigue abierta.</td></tr>
+  <tr><td><code>ShowResults(Vec&lt;ResultItem&gt;)</code></td><td>Sustituye la lista (submenús, confirmaciones). El motor rellena <code>plugin_id</code>.</td></tr>
+  <tr><td><code>Paste { text, cursor_left, restore }</code></td><td>Oculta, devuelve el foco a la ventana anterior, pega con <kbd>Ctrl</kbd>+<kbd>V</kbd>, pulsa <kbd>←</kbd> <code>cursor_left</code> veces y, si <code>restore</code>, repone el portapapeles anterior.</td></tr>
+  <tr><td><code>OpenSettings</code></td><td>Abre el panel de ajustes.</td></tr>
+  <tr><td><code>OpenHttp { form, send }</code></td><td>Abre el mini Postman con esa petición; si <code>send</code>, la envía.</td></tr>
+</table>
+<p>Las acciones que terminan en segundo plano (un script con <code>output = launcher</code>)
+devuelven un resultado provisional «Ejecutando…» y luego el host envía
+<code>UiEvent::Results { replaces, items }</code> para sustituirlo.</p>
+
+<h1 id="trait">El trait Plugin</h1>
+<p><code>crates/rukes-core/src/plugin.rs</code>. Todo plugin integrado lo implementa; los externos
+y los scripts también, a través de un adaptador.</p>
+<pre><code class="language-rust">pub trait Plugin: Send + Sync {
+    /// Id, nombre, prefijo, palabras clave, prioridad, global, list_on_keyword.
+    fn metadata(&self) -> PluginMetadata;
+
+    /// Se ejecuta en un hilo del pool, quizá en paralelo para consultas distintas.
+    /// Debe mirar `cancel` en bucles largos y entregar con `sink` (puede llamarlo varias veces).
+    fn query(&self, query: &Query, cancel: &CancelToken, sink: &mut dyn FnMut(Vec&lt;ResultItem&gt;));
+
+    /// Ejecuta la acción `action` sobre un resultado suyo.
+    fn execute(&self, item: &ResultItem, action: &str) -> Result&lt;ActionOutcome, PluginError&gt;;
+
+    /// Reconstruye índices en segundo plano (comando «recargar»). Opcional.
+    fn refresh(&self) {}
+
+    /// Ayuda de «help &lt;id&gt;». Por defecto, la sección [usage.&lt;id&gt;] de los idiomas.
+    fn help(&self) -> Option&lt;PluginHelp&gt; { PluginHelp::from_i18n(&self.metadata().id) }
+
+    /// Comandos sin interfaz que acepta `call`. Opcional.
+    fn commands(&self) -> Vec&lt;PluginCommand&gt; { Vec::new() }
+
+    /// Ejecuta un comando (JSON entra, JSON sale). Puede llamarse desde cualquier hilo.
+    fn call(&self, command: &str, _args: &serde_json::Value)
+        -> Result&lt;serde_json::Value, PluginError&gt; {
+        Err(PluginError::UnknownCommand(command.into()))
+    }
+}</code></pre>
+<h3>ResultItem</h3>
+<table>
+  <tr><th>Campo</th><th>Para qué</th></tr>
+  <tr><td><code>id</code></td><td>Estable entre consultas: la frecency y <code>merge</code> lo usan.</td></tr>
+  <tr><td><code>plugin_id</code></td><td>Lo rellena el motor.</td></tr>
+  <tr><td><code>title</code>, <code>subtitle</code></td><td>Las dos líneas de la fila. Si el subtítulo parece una ruta, la UI lo corta por el medio.</td></tr>
+  <tr><td><code>icon</code></td><td><code>Icon::None</code>, <code>File(PathBuf)</code>, <code>Shell(String)</code>, <code>Named(String)</code> (glifo del tema, o <code>swatch:#rrggbb</code>), <code>Thumbnail(PathBuf)</code>.</td></tr>
+  <tr><td><code>fuzzy</code></td><td>0..1, cuánto encaja.</td></tr>
+  <tr><td><code>alias_match</code>, <code>score</code></td><td>Los calcula el motor.</td></tr>
+  <tr><td><code>actions</code></td><td>La primera es la de <kbd>Enter</kbd>; las demás salen como botones y se asocian a atajos por su id.</td></tr>
+  <tr><td><code>payload</code></td><td>Texto libre del plugin (ruta, valor a copiar, JSON…).</td></tr>
+  <tr><td><code>preview</code></td><td>Archivo para la vista previa (<kbd>Ctrl</kbd>+<kbd>P</kbd>).</td></tr>
+  <tr><td><code>detail</code></td><td>Texto para el panel de detalles (Markdown si empieza por <code># </code>).</td></tr>
+  <tr><td><code>expand</code></td><td>Mostrar el detalle desplegado de entrada.</td></tr>
+</table>
+<h3>Ids de acción estándar</h3>
+<p>Las constantes de <code>ActionId</code> conectan las acciones con los atajos del launcher:</p>
+<table>
+  <tr><th>Constante</th><th>Id</th><th>Atajo</th></tr>
+  <tr><td><code>OPEN</code></td><td><code>open</code></td><td><kbd>Enter</kbd> (si es la primera)</td></tr>
+  <tr><td><code>RUN_AS_ADMIN</code></td><td><code>run_as_admin</code></td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td></tr>
+  <tr><td><code>OPEN_LOCATION</code></td><td><code>open_location</code></td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td></tr>
+  <tr><td><code>COPY_PATH</code></td><td><code>copy_path</code></td><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
+  <tr><td><code>OPEN_WITH</code></td><td><code>open_with</code></td><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td></tr>
+  <tr><td><code>TERMINAL_HERE</code></td><td><code>terminal_here</code></td><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td></tr>
+  <tr><td><code>EDIT</code></td><td><code>edit</code></td><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td></tr>
+  <tr><td><code>DELETE</code></td><td><code>delete</code></td><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td></tr>
+  <tr><td><code>PIN</code></td><td><code>pin</code></td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td></tr>
+</table>
+<p>Un atajo solo hace algo si la fila seleccionada tiene una acción con ese id. Cualquier otro id
+(<code>"wiki"</code>, <code>"copiar"</code>) solo se usa con su botón.</p>
+
+<h2 id="plugin-rust">Escribir un plugin integrado</h2>
+<p>Ejemplo completo: un plugin <b>dado</b> que lanza dados (<code>dado 2d6</code>). Va en
+<code>crates/rukes-plugins/src/dice.rs</code>.</p>
+<pre data-title="crates/rukes-plugins/src/dice.rs"><code class="language-rust">//! Lanza dados: `dado`, `dado 20`, `dado 3d6`.
+
+use rukes_core::i18n::{tr, trf};
+use rukes_core::{
+    Action, ActionId, ActionOutcome, CancelToken, Icon, Plugin, PluginError, PluginMetadata,
+    Query, ResultItem,
+};
+
+/// Plugin de dados.
+pub struct DicePlugin {
+    /// Caras por defecto (de `config.toml`).
+    pub faces: u32,
+}
+
+/// `"3d6"` → (3, 6); `"20"` → (1, 20); vacío → (1, faces).
+fn parse(text: &amp;str, faces: u32) -> Option&lt;(u32, u32)&gt; {
+    let t = text.trim().to_lowercase();
+    if t.is_empty() {
+        return Some((1, faces));
+    }
+    let (n, f) = match t.split_once('d') {
+        Some((n, f)) => (if n.is_empty() { 1 } else { n.parse().ok()? }, f.parse().ok()?),
+        None => (1, t.parse().ok()?),
+    };
+    ((1..=100).contains(&amp;n) &amp;&amp; (2..=1000).contains(&amp;f)).then_some((n, f))
+}
+
+fn roll(n: u32, faces: u32) -> Vec&lt;u32&gt; {
+    (0..n).map(|_| getrandom::u32().unwrap_or(0) % faces + 1).collect()
+}
+
+impl Plugin for DicePlugin {
+    fn metadata(&amp;self) -> PluginMetadata {
+        PluginMetadata {
+            id: "dice".into(),
+            name: tr("dice.name").into(),
+            prefix: None,
+            keywords: vec!["dado".into(), "dice".into()],
+            priority: 0.0,
+            global: false,          // solo con su palabra clave
+            list_on_keyword: true,  // «dado» sin espacio ya muestra el resultado
+        }
+    }
+
+    fn query(&amp;self, q: &amp;Query, cancel: &amp;CancelToken, sink: &amp;mut dyn FnMut(Vec&lt;ResultItem&gt;)) {
+        let Some((n, faces)) = parse(&amp;q.text, self.faces) else {
+            return; // nada que mostrar: no se llama a sink
+        };
+        if cancel.is_cancelled() {
+            return;
+        }
+        let dice = roll(n, faces);
+        let total: u32 = dice.iter().sum();
+        let mut item = ResultItem::new(format!("{n}d{faces}"), total.to_string());
+        item.subtitle = trf("dice.subtitle", &amp;[("dice", &amp;format!("{dice:?}"))]);
+        item.icon = Icon::Named("generator".into());
+        item.fuzzy = 1.0;
+        item.payload = total.to_string();
+        item.actions = vec![
+            Action::new(ActionId::OPEN, tr("dice.again")),
+            Action::new("copy", tr("action.copy")),
+        ];
+        sink(vec![item]);
+    }
+
+    fn execute(&amp;self, item: &amp;ResultItem, action: &amp;str) -> Result&lt;ActionOutcome, PluginError&gt; {
+        match action {
+            // Enter: volver a lanzar (la consulta se repite y sale otro número).
+            ActionId::OPEN => Ok(ActionOutcome::KeepOpen),
+            // crate::util::copy copia al portapapeles y devuelve el aviso «Copiado».
+            "copy" => crate::util::copy(&amp;item.payload),
+            other => Err(PluginError::UnsupportedAction(other.into())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_dice_notation() {
+        assert_eq!(parse("", 6), Some((1, 6)));
+        assert_eq!(parse("20", 6), Some((1, 20)));
+        assert_eq!(parse("3d6", 6), Some((3, 6)));
+        assert_eq!(parse("d8", 6), Some((1, 8)));
+        assert_eq!(parse("0d6", 6), None);
+        assert_eq!(parse("hola", 6), None);
+    }
+
+    #[test]
+    fn rolls_stay_in_range() {
+        assert!(roll(50, 6).iter().all(|d| (1..=6).contains(d)));
+    }
+}</code></pre>
+<h4>Buenas prácticas</h4>
+<ul>
+  <li><b><code>query</code> debe ser rápido.</b> Indexa en <code>refresh</code> o en un hilo propio y
+    consulta el índice en memoria. Si haces E/S, comprueba <code>cancel.is_cancelled()</code> a
+    menudo.</li>
+  <li><b>No llames a <code>sink</code> si no hay nada.</b> Una lista vacía no hace daño, pero
+    ahorra trabajo a la UI.</li>
+  <li><b>Ids estables:</b> si el id cambia en cada consulta, la frecency no aprende.</li>
+  <li><b>Textos con <code>tr</code>/<code>trf</code></b>, nunca literales en la interfaz.</li>
+  <li><b>Errores:</b> devuelve <code>PluginError</code>; la UI los muestra como aviso. Nada de
+    <code>unwrap</code>.</li>
+  <li>Si el plugin necesita algo del host (ajustes, el motor), recíbelo en el constructor
+    (<code>Arc</code>, <code>Weak</code>, una clausura) en vez de usar globales.</li>
+</ul>
+
+<h2 id="plugin-registro">Registrarlo</h2>
+<p>Un plugin integrado toca seis sitios. Siguiendo el ejemplo de <code>dice</code>:</p>
+<h4>1. Exportar el módulo</h4>
+<pre data-title="crates/rukes-plugins/src/lib.rs"><code class="language-rust">pub mod dice;</code></pre>
+<h4>2. Su sección en el esquema</h4>
+<pre data-title="crates/rukes-config/src/schema.rs"><code class="language-rust">/// Dados (`dado 3d6`).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Dice {
+    /// Activar el plugin.
+    pub enabled: bool,
+    /// Caras por defecto.
+    pub faces: u32,
+}
+
+impl Default for Dice {
+    fn default() -> Self {
+        Self { enabled: true, faces: 6 }
+    }
+}
+
+// …y en `struct Plugins`:
+pub dice: Dice,</code></pre>
+<p>Los comentarios <code>///</code> se convierten en las descripciones del JSON Schema (el
+autocompletado de VS Code).</p>
+<h4>3. La configuración por defecto comentada</h4>
+<pre data-title="crates/rukes-config/src/default_config.toml"><code class="language-toml"># Dados: «dado», «dado 20», «dado 3d6».
+[plugins.dice]
+enabled = true
+faces = 6</code></pre>
+<p>El test <code>default_template_parses_to_defaults</code> compara este archivo con
+<code>Config::default()</code>: si no coinciden, falla.</p>
+<h4>4. Instalarlo en el host</h4>
+<pre data-title="crates/rukes-app/src/host.rs · install_plugins"><code class="language-rust">if config.plugins.dice.enabled {
+    plugins.push(Arc::new(rukes_plugins::dice::DicePlugin {
+        faces: config.plugins.dice.faces,
+    }));
+}</code></pre>
+<p><code>install_plugins</code> se vuelve a ejecutar cada vez que cambia la configuración, así que
+activar o desactivar el plugin no necesita reiniciar.</p>
+<h4>5. El interruptor en los ajustes</h4>
+<pre data-title="crates/rukes-app/src/settings_panel.rs · form()"><code class="language-rust">// clave con puntos, clave i18n del nombre, clave i18n de la ayuda ("" = sin ayuda), valor
+toggle("plugins.dice.enabled", "dice.name", "", c.plugins.dice.enabled),</code></pre>
+<p>El test <code>form_reflects_the_config_and_every_key_exists</code> comprueba que cada clave del
+formulario existe en <code>config.toml</code>.</p>
+<h4>6. Textos y ayuda</h4>
+<pre data-title="crates/rukes-core/lang/es.toml"><code class="language-toml">[dice]
+name = "Dados"
+subtitle = "Tiradas: {dice} · Enter vuelve a lanzar"
+again = "Lanzar otra vez"
+
+[usage.dice]
+summary = "Lanza dados con notación de rol"
+ex1 = "dado | Un dado de 6 caras"
+ex2 = "dado 20 | Un dado de 20 caras"
+ex3 = "dado 3d6 | Tres dados de 6 caras y su suma"
+tip1 = "Las caras por defecto se cambian en [plugins.dice] faces"</code></pre>
+<p>Lo mismo en <code>en.toml</code>. <code>help dado</code> ya mostrará la ayuda (la genera
+<code>PluginHelp::from_i18n</code>) y, si quieres, añade <code>"dice"</code> a los ids de la leyenda en
+<code>hints.rs</code>.</p>
+
+<h2 id="plugin-comandos">Comandos entre plugins</h2>
+<p>Un plugin expone comandos sin interfaz implementando <code>commands</code> y <code>call</code>.
+Otros plugins y la API de Rhai los llaman con <code>Engine::call(plugin_id, comando, args)</code>,
+que busca el plugin, envuelve la llamada en <code>catch_unwind</code> y devuelve
+<code>Result&lt;serde_json::Value, PluginError&gt;</code>. <code>Engine::commands()</code> lista
+<code>(plugin_id, PluginCommand)</code> de todos.</p>
+<pre><code class="language-rust">impl Plugin for DicePlugin {
+    // …
+    fn commands(&amp;self) -> Vec&lt;PluginCommand&gt; {
+        vec![PluginCommand::new("roll", "{n, faces} → {dice: [..], total}")]
+    }
+
+    fn call(&amp;self, command: &amp;str, args: &amp;serde_json::Value)
+        -> Result&lt;serde_json::Value, PluginError&gt; {
+        match command {
+            "roll" => {
+                let n = args["n"].as_u64().unwrap_or(1) as u32;
+                let faces = args["faces"].as_u64().unwrap_or(u64::from(self.faces)) as u32;
+                if !(1..=100).contains(&amp;n) || !(2..=1000).contains(&amp;faces) {
+                    return Err(PluginError::BadArgs("n 1..100, faces 2..1000".into()));
+                }
+                let dice = roll(n, faces);
+                let total: u32 = dice.iter().sum();
+                Ok(serde_json::json!({ "dice": dice, "total": total }))
+            }
+            other => Err(PluginError::UnknownCommand(other.into())),
+        }
+    }
+}</code></pre>
+<pre data-title="Desde Rhai"><code class="language-rhai">let r = plugin_call("dice", "roll", #{ n: 3, faces: 6 });
+print(`Total: ${r.total}`);</code></pre>
+<p>Los comandos que ya existen (<code>notes</code>, <code>todo</code>, <code>remind</code>) están en la
+<a href="index.html#plugin-comandos">guía de usuario</a>. <code>call</code> se puede invocar desde
+cualquier hilo: protege el estado compartido con un <code>Mutex</code>.</p>
+
+<h2 id="externos">Plugins externos por dentro</h2>
+<p><code>crates/rukes-plugins/src/external/</code>:</p>
+<table>
+  <tr><th>Archivo</th><th>Qué hace</th></tr>
+  <tr><td><code>manifest.rs</code></td><td>Lee y valida <code>plugin.toml</code> (<code>deny_unknown_fields</code> en <code>[plugin]</code>, al menos keywords/prefix/global). Errores con línea.</td></tr>
+  <tr><td><code>process.rs</code></td><td>Arranca el proceso (sin ventana, <code>CREATE_NO_WINDOW</code>, cwd = carpeta del plugin, variables <code>RUKES_PROTOCOL</code>, <code>PYTHONUNBUFFERED</code>, <code>PYTHONIOENCODING</code>), un hilo lector de stdout que reparte las respuestas por <code>id</code> y las notificaciones (<code>results</code>, <code>log</code>), y un hilo que copia stderr al log.</td></tr>
+  <tr><td><code>plugin.rs</code></td><td>Adaptador <code>impl Plugin</code>: traduce <code>query</code>/<code>execute</code> a mensajes, convierte los elementos JSON a <code>ResultItem</code> y las respuestas de <code>action</code> a <code>ActionOutcome</code>. Lleva la cuenta de fallos.</td></tr>
+  <tr><td><code>mod.rs</code></td><td>Descubre las carpetas, crea los adaptadores, el plugin <code>plugins</code> (lista y reinicio) y la notificación de plugins nuevos.</td></tr>
+  <tr><td><code>tests.rs</code></td><td>Pruebas con plugins de mentira (scripts que responden, se cuelgan o mueren).</td></tr>
+</table>
+<h4>Ciclo de una consulta externa</h4>
+<ol>
+  <li>Primera consulta: arranca el proceso y envía <code>initialize</code> (espera hasta 5 s).</li>
+  <li>Envía <code>query</code> con un <code>id</code> de petición y el <code>query_id</code> del motor.</li>
+  <li>Espera la respuesta con <code>recv_timeout</code> en tramos cortos, mirando el
+    <code>CancelToken</code>: si el usuario sigue escribiendo, envía <code>cancel</code> y deja de
+    esperar (no cuenta como fallo).</li>
+  <li>Las notificaciones <code>results</code> con ese <code>query_id</code> se entregan a
+    <code>sink</code> al llegar.</li>
+  <li>Timeout (2 s), proceso muerto o JSON ilegible: fallo. Tres seguidos → estado
+    «desactivado» hasta recargar o reiniciar desde <code>plugins</code>. Un éxito pone el contador a
+    cero.</li>
+</ol>
+<p>El protocolo completo, con todos los campos, está en
+<a href="plugin-protocol.md"><code>docs/plugin-protocol.md</code></a> y resumido en la
+<a href="index.html#plugin-protocol">guía de usuario</a>. Las plantillas que usa
+<code>nuevo plugin</code> están en <code>crates/rukes-app/templates/</code>
+(<code>plugin.py</code>, <code>plugin.js</code>, <code>plugin.ps1</code>) y se incrustan con
+<code>include_str!</code> en <code>create_plugin.rs</code>.</p>
+
+<h1 id="scripts">Motor de scripts</h1>
+<p><code>crates/rukes-script/src/</code>:</p>
+<table>
+  <tr><th>Archivo</th><th>Qué hace</th></tr>
+  <tr><td><code>catalog.rs</code></td><td>Recorre la carpeta de scripts, lee la cabecera de cada archivo y mantiene el catálogo. Se recarga cuando el <code>DirWatcher</code> avisa.</td></tr>
+  <tr><td><code>header.rs</code></td><td>Lee los <code>@rukes.*</code> de los primeros bytes del archivo, quitando los marcadores de comentario de cualquier lenguaje (<code>#</code>, <code>//</code>, <code>--</code>, <code>;</code>, <code>::</code>, <code>REM</code>, <code>'</code>, <code>&lt;# #&gt;</code>, <code>/* */</code>). Acepta sinónimos (<code>title</code>, <code>desc</code>, <code>keyword</code>…) y valores en español para <code>output</code>.</td></tr>
+  <tr><td><code>args.rs</code></td><td>Tipos de argumento (<code>text</code>, <code>number</code>, <code>file</code>, <code>bool</code>, <code>choice</code>), <code>required</code>, <code>default=</code>; separa la línea en palabras respetando comillas; el último <code>text</code> se queda con el resto.</td></tr>
+  <tr><td><code>lang.rs</code></td><td>Elige el intérprete por extensión (con alternativas en el PATH y <code>[scripts.interpreters]</code>) y <code>find_in_path</code>.</td></tr>
+  <tr><td><code>proc.rs</code></td><td>Lanza el proceso dentro de un <i>Job Object</i> de Windows (para matar el árbol entero al cancelar o al agotar el tiempo), con las variables <code>RUKES_*</code>, captura stdout/stderr y aplica el timeout.</td></tr>
+  <tr><td><code>filter.rs</code></td><td>Interpreta la salida JSON (lista o <code>{items}</code>) como resultados: <code>open</code>/<code>url</code>/<code>path</code>, <code>copy</code>/<code>text</code>/<code>arg</code>, <code>query</code>.</td></tr>
+  <tr><td><code>runs.rs</code></td><td>Historial de ejecuciones (<code>logs</code>): estado, duración, salida y errores, con cancelación.</td></tr>
+  <tr><td><code>plugin.rs</code></td><td>El <code>impl Plugin</code> de los scripts: cada script es un resultado buscable; su alias es una palabra clave; ejecutar → hilo nuevo, y según <code>output</code> notifica, copia, abre terminal o devuelve resultados.</td></tr>
+  <tr><td><code>templates.rs</code></td><td>Plantillas de <code>new script</code> por lenguaje.</td></tr>
+  <tr><td><code>rhai_api.rs</code></td><td>El motor Rhai y su API.</td></tr>
+</table>
+<h4>Ejecución de un script</h4>
+<div class="diagram">Enter ─▶ ScriptsPlugin::execute
+          │ args::parse(texto tras el alias, cabecera)   ─▶ error «falta title» si es required
+          │ env = RUKES_QUERY, RUKES_ARG_*, RUKES_CLIPBOARD, RUKES_SELECTED_FILE(S), …
+          │ runs.start(script) → id de ejecución (para «logs» y cancelar)
+          ▼
+   hilo nuevo:  .rhai → rhai_api::run(Input { source, query, args, env, deadline, cancel, … })
+                otro  → proc::run(intérprete + archivo + args, env, cwd, timeout, job)
+          │
+          ▼  según @rukes.output
+   notification → notify(última línea) · clipboard → set_text · terminal → ventana visible
+   launcher     → filter::parse(salida) → UiEvent::Results · silent → nada
+   runs.finish(id, código, salida, errores)</div>
+<p>Los scripts con <code>hotkey</code> se registran como atajos globales con
+<code>Target::Script</code>; los de <code>filter = true</code> se ejecutan en
+<code>query</code> en vez de en <code>execute</code> (con un timeout corto y cancelación).</p>
+
+<h2 id="rhai">Sandbox de Rhai</h2>
+<p><code>rhai_api::engine(input, out)</code> crea un <code>rhai::Engine</code> por ejecución:</p>
+<pre data-title="crates/rukes-script/src/rhai_api.rs"><code class="language-rust">let mut e = Engine::new();
+e.set_module_resolver(rhai::module_resolvers::DummyModuleResolver::new()); // sin import
+e.disable_symbol("eval");
+e.set_max_call_levels(64);
+e.set_max_expr_depths(64, 32);
+e.set_max_string_size(16 * 1024 * 1024);
+e.set_max_array_size(1_000_000);
+e.set_max_map_size(100_000);
+// Cada 512 operaciones: ¿pasó el deadline o se canceló? → se detiene el script.
+e.on_progress(move |ops| (ops % 512 == 0 &amp;&amp; l.stop()).then_some(Dynamic::UNIT));
+e.on_print(/* añade a la salida */);
+e.on_debug(/* añade "[debug línea:col] …" */);</code></pre>
+<ul>
+  <li>No hay acceso a archivos: Rhai no trae funciones de E/S y no se registran.</li>
+  <li><code>query</code>, <code>args</code>, <code>selected_file</code> y <code>active_window</code> se
+    insertan en el <code>Scope</code> como constantes.</li>
+  <li>Las funciones que bloquean (<code>sleep</code>, <code>run</code>, <code>http*</code>) miran
+    <code>Limits::check()</code> antes y durante: el timeout y el botón de cancelar de
+    <code>logs</code> las cortan. <code>run</code> usa el mismo Job Object que los scripts normales.</li>
+  <li><code>http</code> solo acepta <code>http://</code> y <code>https://</code>, limita a 30 s y 8 MB
+    (usa <code>rukes_platform::http</code>).</li>
+  <li><code>plugin_call</code>, <code>note_add</code>, <code>todo_add</code> y <code>remind</code> usan
+    <code>Input::engine</code> (<code>Weak&lt;Engine&gt;</code>) → <code>Engine::call</code>. Los valores
+    se convierten de <code>Dynamic</code> a <code>serde_json::Value</code> y vuelta.</li>
+  <li>El valor final: si es una lista de mapas con <code>title</code> se convierte en resultados;
+    si es texto o número se añade a la salida.</li>
+</ul>
+<h4>Añadir una función a Rhai</h4>
+<pre><code class="language-rust">// En rhai_api::engine, junto a las demás:
+e.register_fn("upper_first", |s: &amp;str| -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().chain(c).collect(),
+        None => String::new(),
+    }
+});
+
+// Si puede fallar, devuelve Result y usa `err(...)` para un error legible:
+e.register_fn("read_env_or", |name: &amp;str, default: &amp;str| -> Result&lt;String, Box&lt;EvalAltResult&gt;&gt; {
+    Ok(std::env::var(name).unwrap_or_else(|_| default.to_owned()))
+});</code></pre>
+<p>Después: un test en el módulo <code>tests</code> de <code>rhai_api.rs</code> (ejecutan código Rhai
+real con <code>run</code>), y una fila en la tabla de la API de la guía de usuario.</p>
+
+<h2 id="workflows">Workflows</h2>
+<p><code>crates/rukes-plugins/src/workflows/</code>:</p>
+<ul>
+  <li><b><code>mod.rs</code></b>: tipos (<code>Workflow</code>, <code>Step</code>, <code>WindowSpec</code>,
+    <code>Trigger</code>, <code>Target</code>) y la carga de los <code>.toml</code> de la carpeta,
+    con los ejemplos de la primera vez. Los errores se notifican con archivo y línea.</li>
+  <li><b><code>plugin.rs</code></b>: el <code>impl Plugin</code> (buscar por nombre o alias,
+    <code>workflows</code>, <code>triggers</code>, detalle con los pasos en <kbd>Ctrl</kbd>+<kbd>P</kbd>).</li>
+  <li><b><code>run.rs</code></b>: ejecuta los pasos en orden en un hilo propio.</li>
+  <li><b><code>triggers.rs</code></b>: el planificador.</li>
+</ul>
+<h4>Colocar una ventana</h4>
+<ol>
+  <li>Antes de abrir la app se apuntan las ventanas que ya existen.</li>
+  <li>Se lanza con <code>shell::launch</code> (con <code>runas</code> si <code>admin</code>).</li>
+  <li>Se espera (hasta <code>wait</code>) una ventana nueva visible del proceso, o una cuyo título
+    o ejecutable contenga <code>title</code> (útil para apps de una sola instancia que reutilizan
+    otro proceso).</li>
+  <li>Se calcula el rectángulo en el área de trabajo del monitor (<code>monitor::list</code>,
+    ordenados: principal primero y luego por x) a partir de <code>snap</code> o de
+    <code>x/y/width/height</code> (píxeles o %), y se aplica con <code>SetWindowPos</code>,
+    compensando el borde invisible de DWM.</li>
+</ol>
+
+<h2 id="triggers">Triggers y atajos</h2>
+<p><code>triggers.rs</code> corre en un hilo que duerme hasta el próximo disparo:</p>
+<pre data-title="crates/rukes-plugins/src/workflows/triggers.rs"><code class="language-rust">const STARTUP_DELAY: u64 = 5;        // s tras arrancar para startup/login
+const LOGIN_WINDOW: u64 = 10 * 60;  // login solo si Windows lleva menos de esto encendido
+
+// Próximo disparo de cada tipo:
+When::At { hh, mm, days } => próximo HH:MM en un día permitido (hora local)
+When::Every(d)            => último + d (mínimo 60 s)
+When::Startup             => Some(now + STARTUP_DELAY)
+When::Login               => (uptime &lt; LOGIN_WINDOW).then_some(now + STARTUP_DELAY)</code></pre>
+<ul>
+  <li>Al despertar ejecuta los vencidos y recalcula. Si se despierta mucho más tarde de la hora
+    de un <code>at</code> (suspensión), registra «hora perdida» y no lo ejecuta: pasa al siguiente.</li>
+  <li><code>run</code> se resuelve a un <code>Target</code>: <code>workflow:x</code>,
+    <code>script:x</code>, o un nombre suelto (primero workflow, luego script).</li>
+  <li>Pausar desde la bandeja detiene el disparo (el hilo sigue para poder reanudar).</li>
+  <li>Al cambiar los archivos de <code>workflows</code> se reconstruye la lista.</li>
+</ul>
+<h4>Atajos globales</h4>
+<p><code>Host::refresh_hotkeys</code> reúne los atajos de los workflows, de los scripts y el del
+mini Postman en un <code>HotkeySet</code> de <code>Target</code>
+(<code>Workflow</code> / <code>Script</code> / <code>Http</code>), descarta los repetidos o iguales al
+principal (y lo notifica) y los registra con <code>RegisterHotKey</code> en
+<code>rukes_platform::hotkey</code>. Al pulsar uno, <code>Host::run_target</code> lo ejecuta:
+<code>Http</code> muestra la ventana y envía <code>UiEvent::OpenHttp</code>.</p>
+
+<h1 id="config">Configuración</h1>
+<ul>
+  <li><b>Esquema</b> (<code>schema.rs</code>): structs con <code>#[serde(default)]</code>; cada
+    sección implementa <code>Default</code>. <code>deny_unknown_fields</code> detecta erratas. Los
+    comentarios <code>///</code> van al JSON Schema con <code>schemars</code>.</li>
+  <li><b>Por defecto</b> (<code>default_config.toml</code>): el archivo que se escribe en el primer
+    arranque, comentado. Un test verifica que coincide con <code>Config::default()</code>.</li>
+  <li><b>Errores</b>: <code>toml</code> da línea y columna; se notifica y se sigue con la
+    configuración anterior.</li>
+  <li><b>Vigilancia</b> (<code>watch.rs</code>): <code>notify</code> con antirrebote; los editores que
+    guardan con «renombrar y sustituir» también se detectan.</li>
+  <li><b>Edición</b> (<code>edit.rs</code>): el panel de ajustes manda pares
+    <code>(clave con puntos, SettingValue)</code>; se aplican con <code>toml_edit</code>, que conserva
+    comentarios, orden y formato. Solo se escriben los cambiados.</li>
+  <li><b>Aplicar</b>: al recargar, <code>Host</code> compara y rehace lo necesario
+    (<code>install_plugins</code>, idioma, tema → <code>UiEvent::Config</code>, atajos, triggers,
+    arranque con Windows).</li>
+</ul>
+
+<h2 id="temas">Temas y tokens</h2>
+<p><code>crates/rukes-config/src/theme.rs</code> carga el tema en tres pasos:</p>
+<ol>
+  <li><b>Resolver <code>extends</code></b> (recursivo, con detección de ciclos): primero los
+    incluidos (<code>BUILTIN</code>, incrustados con <code>include_str!</code> desde
+    <code>themes/</code>), luego la carpeta del usuario, que puede sobrescribirlos.</li>
+  <li><b>Fusionar</b> los campos del archivo sobre el tema base. Si el archivo cambia
+    <code>bg</code>, <code>fg</code>, <code>muted</code> o <code>accent</code> y no fija los tokens que
+    dependen de ellos, esos tokens se reinician para volver a derivarse (no se hereda una
+    <code>surface</code> que no casa con el fondo nuevo).</li>
+  <li><b>Derivar</b> los que faltan:</li>
+</ol>
+<table>
+  <tr><th>Token</th><th>Derivación</th></tr>
+  <tr><td><code>surface</code></td><td><code>fg</code> con alfa 0,045</td></tr>
+  <tr><td><code>surface_hover</code></td><td><code>fg</code> con alfa 0,085</td></tr>
+  <tr><td><code>text_faint</code></td><td><code>mix(muted, bg, 0.35)</code></td></tr>
+  <tr><td><code>accent_soft</code></td><td><code>accent</code> con alfa 0,16</td></tr>
+  <tr><td><code>divider</code></td><td><code>muted</code> con transparencia</td></tr>
+</table>
+<p>Los nombres del archivo admiten alias (<code>FileColors</code> con <code>#[serde(alias)]</code>):
+<code>bg</code>, <code>text</code>, <code>text_muted</code>/<code>text-muted</code>,
+<code>border</code>, <code>surface-hover</code>, <code>text-faint</code>, <code>accent-soft</code>.</p>
+<p>En <code>rukes-app/src/look.rs</code> el tema se convierte en <code>UiStyle</code> (con los
+tokens como <code>Option</code>) y la UI lo traduce a su <code>Look</code>
+(<code>rukes-ui/src/theme.rs</code>), que además tiene <code>danger</code>, <code>warning</code> y
+<code>success</code> con variantes claro/oscuro. Los tokens fijados se multiplican por la
+opacidad del fondo para no tapar Mica/Acrílico. En contraste alto, <code>look.rs</code> sustituye
+todo por los colores del sistema.</p>
+<p>Tamaños derivados de <code>font.size</code> en <code>Look</code>: <code>small()</code> = 0,8 ×,
+<code>desc()</code> = 0,87 ×, <code>input_size()</code> = 1,33 ×.</p>
+
+<h2 id="ui">Interfaz (iced)</h2>
+<p><code>crates/rukes-ui/src/</code>:</p>
+<table>
+  <tr><th>Archivo</th><th>Contenido</th></tr>
+  <tr><td><code>lib.rs</code></td><td>API pública: <code>run</code>, el trait <code>Host</code>, <code>UiEvent</code>, <code>UiConfig</code>/<code>UiStyle</code>, tipos del formulario de ajustes (<code>SettingsForm</code>, <code>SettingKind</code> con <code>Heading</code> para las tarjetas, <code>SettingValue</code>).</td></tr>
+  <tr><td><code>app.rs</code></td><td><code>State</code>, <code>Message</code>, <code>update</code>, <code>view</code>, teclado, lista, filas, separadores de grupo, pie, encabezado, redimensionado.</td></tr>
+  <tr><td><code>hints.rs</code></td><td>La leyenda «SUGERENCIAS»: catálogo de ids, rejilla de dos columnas, pie de teclas.</td></tr>
+  <tr><td><code>panel.rs</code></td><td>El panel de ajustes: navegación con barra de acento, tarjetas, filas nombre/control, lista múltiple con contador, barra fija Cancelar/Guardar.</td></tr>
+  <tr><td><code>http_panel.rs</code></td><td>El mini Postman: barra de método/URL, pestañas, editores, respuesta, historial.</td></tr>
+  <tr><td><code>theme.rs</code></td><td><code>Look</code> (colores y tamaños), estilos de iced, utilidades de texto (<code>fit_chars</code>, <code>ellipsis</code>, <code>ellipsis_middle</code>, <code>looks_like_path</code>, <code>mix</code>).</td></tr>
+</table>
+<h4>Modos</h4>
+<p><code>State</code> tiene un modo: búsqueda (con lista o leyenda), ajustes o mini Postman. La
+búsqueda nunca se mueve; solo cambia lo de debajo. Cada modo calcula su altura y la ventana se
+redimensiona con una animación corta (si <code>animations</code>).</p>
+<h4>Altura de la lista</h4>
+<pre><code class="language-rust">// app.rs: altura = filas + separadores de grupo + pie
+const GROUP_H: f32 = 24.0;   // separador «APLICACIONES ──»
+const FOOTER_H: f32 = 32.0;  // pie de atajos
+// group_headers(): un separador al inicio de cada tramo de un mismo plugin, solo si hay ≥ 2 tramos
+// list_height() = filas visibles · row_height + separadores · GROUP_H + LIST_PAD</code></pre>
+<p>Con la ventana anclada abajo (<code>bottom_center</code>) la lista se dibuja invertida y el host
+usa <code>resize_keep_bottom</code> para crecer hacia arriba sin mover la búsqueda.</p>
+<h4>Recortes de texto</h4>
+<p>iced no corta con «…»; <code>fit_chars(ancho, tamaño)</code> estima cuántos caracteres caben
+(ancho medio por carácter) y <code>ellipsis</code> / <code>ellipsis_middle</code> recortan. Es una
+aproximación: con fuentes muy anchas puede sobrar o faltar algún carácter.</p>
+<h4>El Host desde la UI</h4>
+<pre><code class="language-rust">pub trait Host: Send + Sync + 'static {
+    fn query(&amp;self, text: &amp;str, sink: Sink) -> QueryId;
+    fn execute(&amp;self, item: &amp;ResultItem, action: &amp;str) -> /* ActionOutcome o error */;
+    fn window_ready(&amp;self, hwnd: isize) -> bool;   // aplica Mica, sombra, esquinas
+    fn hide(&amp;self);
+    fn icon(&amp;self, icon: &amp;Icon, px: u32) -> Option&lt;IconRgba&gt;;  // con caché
+    fn shown(&amp;self) {}
+    fn paste(&amp;self, _text: &amp;str, _cursor_left: usize, _restore: bool) {}
+    fn preview(&amp;self, _path: &amp;Path) -> Option&lt;Preview&gt; { None }
+    fn resize_keep_bottom(&amp;self, _width: f32, _height: f32) {}
+    fn settings_form(&amp;self) -> Option&lt;SettingsForm&gt; { None }
+    fn save_settings(&amp;self, _changes: &amp;[(String, SettingValue)]) -> Result&lt;(), String&gt; { … }
+    fn open_config_file(&amp;self) {}
+    fn http_send(&amp;self, _form: &amp;HttpForm) -> Result&lt;HttpResponse, String&gt; { … }
+    fn http_parse(&amp;self, _text: &amp;str) -> Option&lt;HttpForm&gt; { None }
+    fn http_history(&amp;self) -> Vec&lt;HttpForm&gt; { Vec::new() }
+}</code></pre>
+<p>Las llamadas lentas (<code>http_send</code>, iconos) se hacen en <code>Task::perform</code>
+fuera del hilo de la UI. Los eventos del host llegan por un canal que iced escucha como
+<code>Subscription</code> (<code>UiEvent</code>).</p>
+
+<h2 id="teclado">Teclado por dentro</h2>
+<p>Los atajos se resuelven en <code>app.rs</code> con una suscripción a eventos de teclado de iced,
+antes de que lleguen al campo de texto, según el modo:</p>
+<table>
+  <tr><th>Modo</th><th>Tecla</th><th>Efecto interno</th></tr>
+  <tr><td>Búsqueda</td><td><kbd>Enter</kbd></td><td><code>execute(sel, actions[0])</code></td></tr>
+  <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td><code>RUN_AS_ADMIN</code> / <code>OPEN_LOCATION</code> si la fila la tiene</td></tr>
+  <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>O</kbd>/<kbd>T</kbd>/<kbd>E</kbd>/<kbd>D</kbd>/<kbd>S</kbd></td><td><code>COPY_PATH</code>, <code>OPEN_WITH</code>, <code>TERMINAL_HERE</code>, <code>EDIT</code>, <code>DELETE</code>, <code>PIN</code>. <kbd>Ctrl</kbd>+<kbd>C</kbd> sin acción y con texto seleccionado copia el texto.</td></tr>
+  <tr><td></td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Alterna el panel de vista previa/detalle</td></tr>
+  <tr><td></td><td>flechas, <kbd>Tab</kbd>, <kbd>Ctrl</kbd>+<kbd>J</kbd>/<kbd>K</kbd>, <kbd>RePág</kbd>/<kbd>AvPág</kbd></td><td><code>select(i)</code> (también redimensiona); invertido si la ventana está anclada abajo</td></tr>
+  <tr><td></td><td><kbd>Esc</kbd></td><td><code>host.hide()</code></td></tr>
+  <tr><td>Ajustes</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Esc</kbd></td><td><code>save_settings(cambios)</code> / volver a búsqueda</td></tr>
+  <tr><td>Postman</td><td>ver la <a href="index.html#atajos">tabla de usuario</a></td><td>Mensajes de <code>http_panel</code>; <kbd>Tab</kbd> cambia <code>tab</code> y enfoca su editor por id</td></tr>
+</table>
+<div class="warn">iced no expone qué widget tiene el foco. El mini Postman lleva la cuenta él mismo
+(qué pestaña está activa, si el último foco fue la URL) para decidir si <kbd>Enter</kbd> envía; por
+eso, tras hacer clic en la URL desde una pestaña, <kbd>Enter</kbd> no envía hasta escribir o pulsar
+<kbd>Ctrl</kbd>+<kbd>L</kbd>.</div>
+<p>El pie de atajos (<code>footer</code>) se construye a partir de las acciones de la fila: la
+primera como <kbd>↵</kbd>, <code>RUN_AS_ADMIN</code> si no es la primera, y <kbd>Ctrl+P</kbd> «Vista
+previa» si hay <code>preview</code> o «Detalles» si hay <code>detail</code>; como mucho dos a la
+derecha.</p>
+
+<h2 id="plataforma">rukes-platform</h2>
+<p>Envoltorios seguros sobre el crate <code>windows</code>. Cada módulo expone funciones normales
+(sin <code>unsafe</code> hacia fuera) y documenta en cada bloque <code>unsafe</code> por qué es
+correcto (<code>// SAFETY:</code>).</p>
+<table>
+  <tr><th>Módulo</th><th>Qué hace</th></tr>
+  <tr><td><code>window</code>, <code>winlist</code>, <code>monitor</code>, <code>dwm</code></td><td>Mover y enfocar ventanas, listar las visibles, monitores y áreas de trabajo, Mica/Acrílico/esquinas</td></tr>
+  <tr><td><code>shell</code>, <code>explorer</code>, <code>process</code>, <code>job</code></td><td>Abrir con <code>ShellExecuteEx</code> (verbos open/runas/openas), selección del Explorador, procesos, Job Objects</td></tr>
+  <tr><td><code>apps</code>, <code>icons</code></td><td>Menú Inicio y apps de la Tienda (<code>AppsFolder</code>), extracción de iconos a RGBA</td></tr>
+  <tr><td><code>clipboard</code>, <code>clipwatch</code>, <code>dpapi</code>, <code>input</code></td><td>Portapapeles, escucha de cambios, cifrado del historial, envío de teclas (pegar)</td></tr>
+  <tr><td><code>hotkey</code>, <code>tray</code>, <code>instance</code>, <code>autostart</code></td><td>Atajos globales, bandeja, instancia única, inicio con Windows</td></tr>
+  <tr><td><code>syscontrol</code>, <code>power</code>, <code>appearance</code>, <code>wallpaper</code></td><td>Volumen, brillo, wifi, Bluetooth; planes de energía; modo claro/oscuro; fondos</td></tr>
+  <tr><td><code>everything</code>, <code>http</code>, <code>sysinfo</code>, <code>time</code>, <code>text</code>, <code>com</code></td><td>SDK de Everything, cliente HTTP, información del sistema, hora local, utilidades UTF-16, inicialización COM</td></tr>
+</table>
+
+<h2 id="i18n">Textos e idiomas</h2>
+<ul>
+  <li><code>crates/rukes-core/lang/es.toml</code> y <code>en.toml</code> se incrustan en el binario.</li>
+  <li><code>tr("seccion.clave")</code> devuelve el texto; <code>trf("clave", &amp;[("n", "3")])</code>
+    sustituye <code>{n}</code>; <code>lookup</code> devuelve <code>Option</code> (para textos
+    opcionales como la ayuda).</li>
+  <li>Orden de búsqueda: archivo del usuario en <code>lang/</code> → idioma incrustado → inglés →
+    la propia clave.</li>
+  <li>La ayuda de cada plugin sale de <code>[usage.&lt;id&gt;]</code>: <code>summary</code>,
+    <code>ex1…exN</code> con el formato <code>"ejemplo | descripción"</code> y
+    <code>tip1…tipN</code>.</li>
+  <li>El test <code>included_languages_parse_and_have_the_same_keys</code> comprueba que
+    <code>es.toml</code> y <code>en.toml</code> tienen las mismas claves.</li>
+</ul>
+
+<h2 id="persistencia">Persistencia</h2>
+<table>
+  <tr><th>Qué</th><th>Archivo</th><th>Formato</th></tr>
+  <tr><td>Frecency</td><td><code>%LOCALAPPDATA%\Rukes\state\frecency.json</code></td><td>JSON versionado (<code>persist.rs</code>)</td></tr>
+  <tr><td>Índice de apps</td><td><code>cache\apps.json</code></td><td>JSON, se rehace al cambiar el menú Inicio</td></tr>
+  <tr><td>Historial del portapapeles</td><td><code>clipboard\history.bin</code></td><td>Cifrado con DPAPI</td></tr>
+  <tr><td>Índice de archivos</td><td><code>cache\files.bin</code></td><td>Binario propio</td></tr>
+  <tr><td>Historial de scripts (<code>logs</code>)</td><td><code>state\script-runs.json</code></td><td>JSON</td></tr>
+  <tr><td>Recordatorios</td><td><code>state\reminders.json</code></td><td>JSON</td></tr>
+  <tr><td>Tasas de cambio</td><td><code>cache\currency.json</code></td><td>JSON con fecha</td></tr>
+  <tr><td>Notas y tareas</td><td><code>%APPDATA%\Rukes\notes\*.md</code></td><td>Markdown plano</td></tr>
+</table>
+<p><code>persist::save</code> escribe en <code>archivo.tmp</code> y lo renombra encima: un corte de
+luz nunca deja un JSON a medias. <code>persist::load</code> comprueba la versión y, si no
+coincide o el archivo está roto, empieza vacío y lo registra.</p>
+
+<h1 id="comandos-dev">Compilar y probar</h1>
+<pre><code class="language-bash"># Compilar y ejecutar en modo debug
+cargo run -p rukes-app
+
+# Release (lto fat: tarda varios minutos)
+cargo build --release -p rukes-app
+# → target\release\rukes.exe
+
+# Lo que debe pasar antes de cada commit
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+
+# Un solo crate o un solo test
+cargo test -p rukes-core ranking
+cargo test -p rukes-script rhai_api::tests::
+
+# Regenerar el JSON Schema
+cargo run -p rukes-app -- --schema config.schema.json
+
+# Más log mientras pruebas
+set RUKES_LOG=debug</code></pre>
+<div class="tip">Para probar sin tocar tu configuración real, crea <code>portable.txt</code> junto a
+<code>target\debug\rukes.exe</code>: usará <code>target\debug\data</code>.</div>
+<h4>Dónde van los tests</h4>
+<ul>
+  <li>Lógica pura (parsers, ranking, derivación de tokens, recortes de texto): tests unitarios
+    en el mismo archivo (<code>#[cfg(test)] mod tests</code>).</li>
+  <li>Motor: <code>engine.rs</code> tiene plugins de prueba (<code>ListPlugin</code>, <code>Echo</code>)
+    que simulan lentitud, pánicos y comandos.</li>
+  <li>Plugins externos: <code>external/tests.rs</code> lanza plugins de prueba reales.</li>
+  <li>Temas: <code>every_builtin_theme_loads</code> carga todos los incluidos.</li>
+  <li>Config: <code>default_template_parses_to_defaults</code>, errores con línea y columna.</li>
+  <li>Las pruebas de interfaz son manuales: hay listas en <code>docs/checklists/</code>.</li>
+</ul>
+
+<h2 id="recetas">Recetas</h2>
+<h3>Añadir un ajuste</h3>
+<ol>
+  <li>Campo con <code>///</code> en la struct de <code>schema.rs</code> y su valor en
+    <code>Default</code>.</li>
+  <li>La misma línea, comentada, en <code>default_config.toml</code>.</li>
+  <li>Úsalo donde toque (en <code>Host</code>, en el plugin o en <code>UiConfig</code> si es de la
+    interfaz).</li>
+  <li>Si debe salir en el panel: una fila en <code>settings_panel.rs</code> (<code>toggle</code>,
+    <code>choice</code>, <code>slider</code>, <code>text</code>…) con su clave con puntos, y su
+    validación si hace falta.</li>
+  <li>Textos en <code>es.toml</code> y <code>en.toml</code>.</li>
+</ol>
+<h3>Añadir un tema incluido</h3>
+<ol>
+  <li><code>themes/mi-tema.toml</code> (con <code>extends = "rukes-dark"</code> si solo cambias
+    colores).</li>
+  <li>Añádelo a <code>BUILTIN</code> en <code>rukes-config/src/theme.rs</code> con
+    <code>include_str!</code>.</li>
+  <li><code>cargo test -p rukes-config</code>: <code>every_builtin_theme_loads</code> lo valida.</li>
+</ol>
+<h3>Añadir un idioma</h3>
+<ol>
+  <li>Copia <code>crates/rukes-core/lang/en.toml</code> a <code>fr.toml</code> y tradúcelo.</li>
+  <li>Regístralo en <code>i18n.rs</code> (lista de idiomas incrustados) y en la lista del ajuste
+    <code>language</code>.</li>
+  <li>El test de claves comprobará que no falta ninguna.</li>
+</ol>
+<h3>Añadir un atajo al launcher</h3>
+<ol>
+  <li>Si es una acción sobre la fila: una constante nueva en <code>ActionId</code>.</li>
+  <li>En <code>app.rs</code>, en el manejador de teclado del modo búsqueda, asócialo a esa acción.</li>
+  <li>Los plugins que la soporten la añaden a <code>actions</code> de sus resultados.</li>
+  <li>Documéntalo en la leyenda (<code>hints.rs</code>), en la ayuda y en la tabla de atajos.</li>
+</ol>
+<h3>Añadir un paso de workflow</h3>
+<ol>
+  <li>Variante nueva en <code>Step</code> (<code>workflows/mod.rs</code>), con serde
+    <code>untagged</code> por su clave.</li>
+  <li>Su ejecución en <code>run.rs</code> y su descripción en el detalle (<code>plugin.rs</code>).</li>
+  <li>Test de parseo y fila en la tabla de la guía.</li>
+</ol>
+
+<h2 id="release">Publicar una versión</h2>
+<p>El proceso completo está en <a href="release.md"><code>docs/release.md</code></a>: subir la
+versión en <code>Cargo.toml</code>, actualizar <code>CHANGELOG.md</code>, compilar en release,
+generar el instalador y el ZIP portable, firmar, y publicar el manifiesto de winget. Las
+mediciones de rendimiento de referencia están en
+<a href="benchmarks.md"><code>docs/benchmarks.md</code></a>.</p>
+
+</main>
+</body>
+</html>

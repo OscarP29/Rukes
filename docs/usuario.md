@@ -3,6 +3,11 @@
 Rukes es un launcher de teclado para Windows 10 (22H2) y Windows 11. Pulsa `Alt+Espacio`,
 escribe y pulsa `Enter`.
 
+> La documentación completa, con ejemplos de código coloreados, está en HTML:
+> [guía de usuario](index.html) (atajos, scripts, Rhai, workflows, triggers, plugins) y
+> [documentación para desarrolladores](desarrolladores.html) (cómo funciona por dentro y cómo
+> ampliarlo). Esta página es el resumen.
+
 ## Instalación
 
 - **Instalador** (`Rukes-<versión>-setup-x64.exe`): se instala para tu usuario en
@@ -27,20 +32,34 @@ Rukes queda residente con un icono en la bandeja. Para que arranque con Windows 
 | `Ctrl+C` | Copiar la ruta o el valor |
 | `Ctrl+O` / `Ctrl+T` | Abrir con… / terminal en la carpeta |
 | `Ctrl+E` / `Ctrl+D` | Editar / borrar (scripts, snippets, historial, recordatorios) |
-| `Ctrl+P` | Vista previa |
-| `↑` `↓`, `Tab`, `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
+| `Ctrl+S` | Fijar un elemento del portapapeles |
+| `Ctrl+P` | Vista previa o detalles |
+| `↑` `↓`, `Tab` / `Shift+Tab`, `Ctrl+J` `Ctrl+K` | Moverse por los resultados (al revés con la ventana anclada abajo) |
+| `RePág` / `AvPág` | Una página arriba / abajo |
 | `Esc` | Ocultar |
+
+En el panel de ajustes: `Ctrl+S` guarda y `Esc` cierra. Los atajos del mini Postman están en
+[su sección](#peticiones-http-mini-postman). Los workflows, los scripts (`@rukes.hotkey`) y el
+mini Postman (`[plugins.http] hotkey`) pueden tener su propio atajo global.
 
 Rukes aprende: lo que eliges más a menudo para una búsqueda sube en la lista.
 
-Con la búsqueda vacía aparece una **leyenda** con ejemplos: haz clic en uno para escribirlo.
-En la fila seleccionada (o bajo el ratón) aparecen **botones** con las demás acciones (abrir
-la carpeta, copiar la ruta, como administrador, ver detalles…); pasa el ratón por encima para
-ver qué hace cada uno. En los ajustes (pestaña Ventana) eliges cuántos comandos muestra la
-leyenda y cuáles; en `config.toml` son `hints_count` y `hints_items` de `[window]`, y
-`hints = false` la quita.
+### La ventana
 
-**Crear cosas nuevas:** escribe `nuevo` (o `new`, o pulsa «Nuevo» en la leyenda) y elige qué
+- **Encabezado:** la búsqueda y, a su derecha, los iconos **＋ Nuevo** y **⚙ Ajustes** (su nombre
+  sale al pasar el ratón).
+- **Leyenda «SUGERENCIAS»:** con la búsqueda vacía, comandos de ejemplo en dos columnas
+  (comando a la izquierda, qué hace a la derecha). Un clic lo escribe. En los ajustes (Ventana →
+  Leyenda de comandos) eliges cuántos (6 por defecto) y cuáles; en `config.toml` son
+  `hints_count` y `hints_items` de `[window]`, y `hints = false` la quita.
+- **Filas:** icono, título y subtítulo cortados con «…» (las rutas por el medio). En la fila
+  seleccionada o bajo el ratón aparecen **botones** con las demás acciones. Las tareas muestran
+  su estado como etiqueta.
+- **Grupos:** si la lista mezcla tipos, separadores finos con el nombre (APLICACIONES, ARCHIVOS…).
+- **Pie de atajos:** la acción de `Enter` de la fila seleccionada y hasta dos atajos que le
+  apliquen (`Ctrl+↵` Administrador, `Ctrl+P` Vista previa o Detalles).
+
+**Crear cosas nuevas:** escribe `nuevo` (o `new`, o pulsa el icono ＋) y elige qué
 crear: un tema, un workflow, un script o un plugin. Rukes te pide el nombre y, si hace falta,
 el lenguaje (scripts y plugins) o el tema en que basarte; crea el archivo en su carpeta y lo
 abre en el editor. Un tema nuevo se activa al momento. También directo: `nuevo tema Mi tema`,
@@ -155,21 +174,63 @@ El historial solo vive en memoria (puede contener tokens) y se borra al cerrar R
 ### Automatización
 
 - **Scripts:** archivos en la carpeta `scripts` junto a `config.toml` (PowerShell, Python,
-  Rhai, .bat…). `new script Backup` crea uno desde una plantilla; `logs` muestra el historial.
+  JavaScript, Rhai, .bat…) con una cabecera `@rukes.name`. `new script Backup` crea uno desde
+  una plantilla; `logs` muestra el historial.
+
+  ```powershell
+  # @rukes.name   Saludar
+  # @rukes.alias  hola
+  # @rukes.arg    nombre:text:default=mundo
+  # @rukes.output notification
+  param([string]$nombre)
+  Write-Output "Hola, $nombre"
+  ```
+
+  Cabeceras: `name`, `description`, `icon`, `alias`, `arg` (`nombre:tipo:opciones`), `output`
+  (`notification`, `launcher`, `clipboard`, `terminal`, `silent`), `timeout`, `hotkey`, `admin`,
+  `cwd`, `interpreter`, `filter`. Variables: `RUKES_QUERY`, `RUKES_ARG_<NOMBRE>`,
+  `RUKES_CLIPBOARD`, `RUKES_SELECTED_FILE`, `RUKES_ACTIVE_WINDOW`… Con `output launcher`, un JSON
+  `{"items": [{"title", "subtitle", "open" | "copy" | "query"}]}` se muestra como resultados.
+- **Rhai:** scripts `.rhai` que corren dentro de Rukes, sin instalar nada, con una API segura:
+  `http_get`, `http`, `run`, `open`, `clipboard`, `notify`, `windows`, `move_window`,
+  `note_add`, `todo_add`, `remind`, `plugin_call`, `parse_json`… Si el script termina con una
+  lista de mapas con `title`, cada uno es una fila.
+
+  ```rhai
+  // @rukes.name   Mi IP pública
+  // @rukes.alias  mi ip
+  // @rukes.output clipboard
+  let ip = http_get("https://api.ipify.org");
+  ip.trim();
+  ip
+  ```
+
 - **Workflows:** `modo trabajo` abre apps y webs y las coloca en tus monitores. Se definen en
-  la carpeta `workflows`. `triggers` lista los disparadores programados (se pausan desde la
-  bandeja).
+  la carpeta `workflows` (`[workflow.id]` con `name`, `alias`, `hotkey` y `steps`: `app`, `url`,
+  `script`, `wait`, `theme`, `power_plan`, `kill`, `notify`; `window = { monitor, snap }`).
+- **Triggers:** ejecutan un workflow o script solos. `triggers` lista los próximos; se pausan
+  desde la bandeja.
+
+  ```toml
+  [[trigger]]
+  at = "09:00"                 # o every = "30m", o on = "startup" | "login"
+  days = ["laborables"]
+  run = "workflow:trabajo"     # o "script:nombre"
+  ```
+
 - **Fondos de pantalla:** `wall`, `wall random`.
-- **Plugins externos:** `plugins` lista los instalados. Cualquier programa que hable JSON por
-  stdin/stdout sirve; ver [protocolo](plugin-protocol.md).
+- **Plugins externos:** `nuevo plugin Mi bot` crea uno que ya funciona (Python, Node.js o
+  PowerShell). Son programas que hablan JSON por stdin/stdout, una línea por mensaje
+  (`initialize`, `query`, `action`, `cancel`); `plugins` lista los instalados. Ver la
+  [guía HTML](index.html#plugins) y el [protocolo](plugin-protocol.md).
 
 ## Configuración
 
-- **Panel de ajustes:** escribe `ajustes`, pulsa «Ajustes» en la leyenda o elige «Ajustes…» en
-  el icono de la bandeja. Tiene pestañas para lo general (tema, idioma, atajo, inicio con
-  Windows), la ventana (posición, ancho, resultados, leyenda, fondo), los plugins y los extras
-  (divisas, Everything…). `Guardar` (o `Ctrl+S`) escribe solo lo cambiado y conserva tus
-  comentarios; `Esc` vuelve a la búsqueda.
+- **Panel de ajustes:** escribe `ajustes`, pulsa el icono ⚙ o elige «Ajustes…» en el icono de
+  la bandeja. A la izquierda las pestañas (General, Ventana, Plugins, Extras); a la derecha los
+  ajustes en tarjetas (Apariencia, Sistema, Tamaño, Leyenda de comandos, Comportamiento).
+  `Guardar` (o `Ctrl+S`) escribe solo lo cambiado y conserva tus comentarios; está desactivado
+  mientras no cambies nada. `Cancelar` o `Esc` vuelve a la búsqueda.
 - **Archivo:** escribe `configuración` (o «Editar config.toml» en el panel) para abrir
   `config.toml` (`%APPDATA%\Rukes\config.toml`), donde está todo lo demás. Los cambios se
   aplican al guardar, sin reiniciar.
@@ -178,9 +239,12 @@ El historial solo vive en memoria (puede contener tokens) y se borra al cerrar R
   pegado a la búsqueda (`↑` sube a los siguientes).
 - **Autocompletado:** junto a `config.toml` se genera `config.schema.json`. Con VS Code y la
   extensión *Even Better TOML* tienes autocompletado, descripciones y validación.
-- **Temas:** `theme = "tokyo-night"`, `"catppuccin-mocha"`, `"nord"`, `"midnight"` (negro
-  puro, sin transparencia), `"system"`… Copia un
-  archivo de `themes` a la carpeta `themes` de tu configuración para crear uno propio.
+- **Temas:** `theme = "system"` (por defecto: `rukes-light` o `rukes-dark` según Windows),
+  `"rukes-dark"`, `"rukes-light"`, `"tokyo-night"`, `"catppuccin-mocha"`, `"nord"`, `"midnight"`
+  (negro puro, sin transparencia)… `nuevo tema Mi tema` crea uno propio. Los colores son
+  **tokens** (`bg`, `surface`, `surface_hover`, `border`, `text`, `text_muted`, `text_faint`,
+  `accent`, `accent_soft`, `selection`); los que un tema no define se calculan a partir de los
+  demás.
 - **Idioma:** `language = "auto"`, `"es"` o `"en"`.
 
 ### Exportar e importar
@@ -210,4 +274,8 @@ En modo portable todo va a la carpeta `data` junto a `rukes.exe`.
   («Recargar Rukes» vuelve a indexar las aplicaciones).
 - **Brillo no disponible:** solo funciona en pantallas internas (portátiles); los monitores
   externos no exponen el brillo a Windows.
+- **Un plugin externo aparece desactivado:** falló 3 veces seguidas. Mira el log, corrígelo y
+  pulsa Enter sobre él en `plugins`.
+- **Un trigger no se ejecutó:** están en pausa, el equipo estaba suspendido a esa hora o `days`
+  no incluye hoy.
 - **Logs detallados:** variable de entorno `RUKES_LOG=debug`.

@@ -4,6 +4,18 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Documentación
+
+- Guía de usuario HTML rehecha (`docs/index.html`): la ventana nueva, todos los atajos de teclado
+  (launcher, ajustes, mini Postman, globales), tokens de tema, scripts, Rhai con la referencia
+  completa de su API, workflows, triggers y plugins externos paso a paso con ejemplos en Python,
+  Node.js y PowerShell.
+- Documentación para desarrolladores (`docs/desarrolladores.html`): arquitectura, crates,
+  arranque, flujo de consultas, enrutado, puntuación, el trait `Plugin` con un plugin de ejemplo
+  completo, plugins externos, scripts, sandbox de Rhai, triggers, configuración, temas, interfaz y
+  recetas.
+- Código con colores y botón «Copiar» en ambas (sin dependencias, funciona sin conexión).
+
 ### Interfaz más ordenada
 
 #### Añadido

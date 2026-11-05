@@ -2,9 +2,10 @@
 
 Launcher de productividad y automatización para Windows 10/11, escrito en Rust: ligero, rápido y con la automatización como ciudadano de primera clase.
 
-> **Versión 1.0.** Documentación en una página: [`docs/index.html`](docs/index.html) (ábrela en
-> el navegador). Guía de usuario completa en [`docs/usuario.md`](docs/usuario.md); la
-> especificación en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
+> **Versión 1.0.** Documentación (ábrela en el navegador): guía de usuario en
+> [`docs/index.html`](docs/index.html) y cómo funciona por dentro en
+> [`docs/desarrolladores.html`](docs/desarrolladores.html). Resumen en Markdown en
+> [`docs/usuario.md`](docs/usuario.md); la especificación en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
 
 ## Capturas
 
