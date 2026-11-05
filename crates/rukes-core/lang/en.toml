@@ -566,6 +566,7 @@ ex2 = "code | Opens Visual Studio Code"
 tip1 = "Ctrl+Enter opens as administrator; Ctrl+Shift+Enter, the folder"
 tip2 = "Profiles with arguments and aliases in [[plugins.apps.profiles]]"
 tip3 = "Reindexed automatically when programs are installed or removed"
+tip4 = "Ctrl+S pins it: it shows up when Rukes opens with nothing typed and Ctrl+1…9 opens it"
 
 [usage.files]
 summary = "Searches files and folders in your folders (or the whole disk with Everything)"
@@ -714,6 +715,7 @@ ex3 = "export config | Backup in Documents"
 ex4 = "quit | Closes Rukes"
 ex5 = "folders | Lists the Rukes folders (workflows, plugins, themes, scripts…)"
 ex6 = "folder scripts | Opens the scripts folder in Explorer"
+tip1 = "Ctrl+S pins an app, file, folder, script or workflow: it shows up when Rukes opens with nothing typed; Ctrl+1…9 opens it"
 
 [usage.http]
 summary = "Mini Postman: a bar that sends HTTP requests and shows the response"
@@ -754,6 +756,16 @@ no_url = "Type a URL or paste a curl command"
 history_pos = "History {n}/{total}"
 keys = "Enter sends · Tab tabs · ↑ ↓ history · Ctrl+M method · Esc closes"
 keys_response = "Ctrl+Enter resends · Tab tabs · Ctrl+H headers · Ctrl+Shift+C/H/X copy body/headers/curl · PgUp PgDn · Esc"
+
+[pins]
+name = "Pinned"
+pin = "Pin to start"
+unpin = "Remove from start"
+pinned = "Pinned: shows up when Rukes opens"
+unpinned = "Removed from pinned"
+full = "There are already 30 pinned items; remove one first"
+open_n = "Open"
+move = "Move"
 
 [footer]
 admin = "Admin"

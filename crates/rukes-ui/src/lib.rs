@@ -76,6 +76,14 @@ pub trait Host: Send + Sync + 'static {
     fn http_history(&self) -> Vec<HttpForm> {
         Vec::new()
     }
+    /// Elementos fijados, en orden: se muestran con la búsqueda vacía.
+    fn pinned(&self) -> Vec<ResultItem> {
+        Vec::new()
+    }
+    /// Mueve un fijado `delta` puestos. Devuelve si se movió.
+    fn pin_shift(&self, _item: &ResultItem, _delta: isize) -> bool {
+        false
+    }
 }
 
 /// Valor de un ajuste del panel visual.

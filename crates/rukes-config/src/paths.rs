@@ -104,6 +104,11 @@ impl Paths {
         self.state_dir.join("reminders.json")
     }
 
+    /// Elementos fijados del launcher.
+    pub fn pins_file(&self) -> PathBuf {
+        self.state_dir.join("pinned.json")
+    }
+
     /// Archivo de frecency.
     pub fn frecency_file(&self) -> PathBuf {
         self.state_dir.join("frecency.json")

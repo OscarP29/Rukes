@@ -566,6 +566,7 @@ ex2 = "code | Abre Visual Studio Code"
 tip1 = "Ctrl+Enter abre como administrador; Ctrl+Shift+Enter, la carpeta"
 tip2 = "Perfiles con argumentos y alias en [[plugins.apps.profiles]]"
 tip3 = "Se reindexan solas al instalar o quitar programas"
+tip4 = "Ctrl+S la fija: aparece al abrir Rukes sin escribir y Ctrl+1…9 la abre"
 
 [usage.files]
 summary = "Busca archivos y carpetas de tus carpetas (o de todo el disco con Everything)"
@@ -714,6 +715,7 @@ ex3 = "exportar configuración | Copia de seguridad en Documentos"
 ex4 = "salir | Cierra Rukes"
 ex5 = "carpetas | Lista las carpetas de Rukes (workflows, plugins, temas, scripts…)"
 ex6 = "carpeta scripts | Abre la carpeta de scripts en el Explorador"
+tip1 = "Ctrl+S fija una app, archivo, carpeta, script o workflow: sale al abrir Rukes sin escribir; Ctrl+1…9 la abre"
 
 [usage.http]
 summary = "Mini Postman: una barra para enviar peticiones HTTP y ver la respuesta"
@@ -754,6 +756,16 @@ no_url = "Escribe una URL o pega un comando curl"
 history_pos = "Historial {n}/{total}"
 keys = "Enter envía · Tab pestañas · ↑ ↓ historial · Ctrl+M método · Esc cierra"
 keys_response = "Ctrl+Enter reenvía · Tab pestañas · Ctrl+H cabeceras · Ctrl+Shift+C/H/X copia cuerpo/cabeceras/curl · RePág AvPág · Esc"
+
+[pins]
+name = "Fijados"
+pin = "Fijar en el inicio"
+unpin = "Quitar del inicio"
+pinned = "Fijado: aparece al abrir Rukes"
+unpinned = "Quitado de los fijados"
+full = "Ya hay 30 fijados; quita alguno antes"
+open_n = "Abrir"
+move = "Mover"
 
 [footer]
 admin = "Administrador"

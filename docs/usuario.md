@@ -32,7 +32,9 @@ Rukes queda residente con un icono en la bandeja. Para que arranque con Windows 
 | `Ctrl+C` | Copiar la ruta o el valor |
 | `Ctrl+O` / `Ctrl+T` | Abrir con… / terminal en la carpeta |
 | `Ctrl+E` / `Ctrl+D` | Editar / borrar (scripts, snippets, historial, recordatorios) |
-| `Ctrl+S` | Fijar un elemento del portapapeles |
+| `Ctrl+S` | Fijar en el inicio una app, archivo, carpeta, script o workflow (en el portapapeles, fija el elemento) |
+| `Ctrl+1` … `Ctrl+9` | Abrir el resultado N (con la búsqueda vacía, el fijado N) |
+| `Alt+↑` / `Alt+↓` | Cambiar de puesto un fijado |
 | `Ctrl+P` | Vista previa o detalles |
 | `↑` `↓`, `Tab` / `Shift+Tab`, `Ctrl+J` `Ctrl+K` | Moverse por los resultados (al revés con la ventana anclada abajo) |
 | `RePág` / `AvPág` | Una página arriba / abajo |

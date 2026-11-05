@@ -58,7 +58,7 @@ impl Action {
 }
 
 /// Origen del icono de un resultado. La UI lo resuelve y lo cachea.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Icon {
     /// Sin icono.
     None,

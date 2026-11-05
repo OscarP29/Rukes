@@ -11,6 +11,7 @@ pub mod http;
 pub mod i18n;
 mod item;
 pub mod persist;
+pub mod pins;
 mod plugin;
 mod query;
 pub mod ranking;

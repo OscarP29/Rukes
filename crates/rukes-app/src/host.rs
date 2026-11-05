@@ -8,6 +8,7 @@ use rukes_config::DirWatcher;
 use rukes_config::theme::Theme;
 use rukes_config::{Config, ConfigError, Hotkey};
 use rukes_core::i18n::{tr, trf};
+use rukes_core::pins::Pins;
 use rukes_core::{ActionOutcome, Engine, Icon, Plugin, QueryId, ResultItem};
 use rukes_platform::clipwatch::{Change, ClipboardWatcher};
 use rukes_platform::hotkey::{self, HotkeyManager, HotkeySet};
@@ -117,6 +118,26 @@ pub struct AppHost {
     /// Plugin de apps vigente y vigilantes del menú Inicio (RF-034).
     apps: Arc<Mutex<Weak<AppsPlugin>>>,
     apps_watch: Mutex<Vec<DirWatcher>>,
+    /// Elementos fijados (se muestran con la búsqueda vacía).
+    pins: Arc<Pins>,
+}
+
+/// Plugins cuyos resultados se pueden fijar: se ejecutan bien fuera de su búsqueda porque
+/// todo lo que necesitan va en el `payload`.
+const PINNABLE: [&str; 6] = [
+    "apps",
+    "files",
+    "files-f",
+    "files-d",
+    "scripts",
+    "workflows",
+];
+
+/// `true` si el resultado se puede fijar en el launcher (los fijados por el propio plugin,
+/// como el portapapeles, siguen siendo cosa suya).
+fn pinnable(it: &ResultItem) -> bool {
+    PINNABLE.contains(&it.plugin_id.as_str())
+        || (it.plugin_id == "rukes" && it.id.starts_with("folder:"))
 }
 
 type ExternalSlot = (std::path::PathBuf, Arc<ExternalPlugins>, Option<DirWatcher>);
@@ -149,6 +170,7 @@ impl AppHost {
         config: &Config,
     ) -> Self {
         let icon_cache = IconCache::open(paths.cache_dir.join("icons"));
+        let pins = Arc::new(Pins::load(&paths.pins_file()));
         Self {
             engine,
             ui,
@@ -186,6 +208,7 @@ impl AppHost {
             wall: Mutex::new(None),
             apps: Arc::default(),
             apps_watch: Mutex::new(Vec::new()),
+            pins,
         }
     }
 
@@ -1366,7 +1389,25 @@ impl AppHost {
 
 impl Host for AppHost {
     fn query(&self, text: &str, sink: Sink) -> QueryId {
-        self.engine.query(text, sink)
+        // A lo que se puede fijar se le añade la acción (Ctrl+S), que resuelve el host.
+        let pins = Arc::clone(&self.pins);
+        self.engine.query(
+            text,
+            Arc::new(move |mut batch: rukes_core::QueryBatch| {
+                for it in &mut batch.items {
+                    if pinnable(it) && !it.has_action(rukes_core::ActionId::PIN) {
+                        let title = if pins.contains(&it.key()) {
+                            "pins.unpin"
+                        } else {
+                            "pins.pin"
+                        };
+                        it.actions
+                            .push(rukes_core::Action::new(rukes_core::ActionId::PIN, title));
+                    }
+                }
+                sink(batch);
+            }),
+        )
     }
 
     fn execute(
@@ -1375,9 +1416,28 @@ impl Host for AppHost {
         item: &ResultItem,
         action: &str,
     ) -> Result<ActionOutcome, String> {
+        if action == rukes_core::ActionId::PIN && pinnable(item) {
+            let pinned = self.pins.toggle(item)?;
+            return Ok(ActionOutcome::Notify(
+                tr(if pinned {
+                    "pins.pinned"
+                } else {
+                    "pins.unpinned"
+                })
+                .to_owned(),
+            ));
+        }
         self.engine
             .execute(query, item, action)
             .map_err(|e| e.to_string())
+    }
+
+    fn pinned(&self) -> Vec<ResultItem> {
+        self.pins.items()
+    }
+
+    fn pin_shift(&self, item: &ResultItem, delta: isize) -> bool {
+        self.pins.shift(&item.key(), delta)
     }
 
     fn window_ready(&self, hwnd: isize) -> bool {

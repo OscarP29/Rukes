@@ -180,6 +180,10 @@ struct State {
     panel: Option<Panel>,
     /// Mini Postman abierto.
     http: Option<HttpPanel>,
+    /// La lista son los fijados (búsqueda vacía).
+    pins_view: bool,
+    /// Última acción lanzada (para refrescar la marca de fijado al terminar).
+    last_action: String,
     /// Tema de iced con los colores del tema de Rukes (listas, interruptores, deslizadores).
     theme: Theme,
 }
@@ -252,6 +256,9 @@ impl State {
     /// Separadores de grupo de la lista: uno por cada tramo de resultados del mismo plugin, si
     /// hay más de uno (con un solo grupo no hacen falta).
     fn group_headers(&self) -> usize {
+        if self.pins_view {
+            return usize::from(self.visible_rows() > 0);
+        }
         let mut runs = 0;
         let mut prev: Option<&str> = None;
         for it in self
@@ -370,13 +377,27 @@ impl State {
 
     fn run_query(&mut self) -> Task<Message> {
         if self.query.trim().is_empty() {
-            self.results.clear();
-            self.selected = 0;
-            self.offset = 0;
-            self.stale = false;
+            // Con la búsqueda vacía se ven los fijados (se conserva la selección al refrescar).
+            let keep = self.pins_view;
             self.qid = self.host.query("", Arc::new(|_| {}));
-            return self.resize();
+            self.results = self.host.pinned();
+            self.pins_view = !self.results.is_empty();
+            let len = self.results.len();
+            if keep && len > 0 {
+                self.selected = self.selected.min(len - 1);
+                self.offset = scroll_to(self.selected, self.offset, len, self.cfg.max_results);
+            } else {
+                self.selected = 0;
+                self.offset = 0;
+            }
+            self.stale = false;
+            return Task::batch([
+                self.load_visible_icons(),
+                self.load_preview(),
+                self.resize(),
+            ]);
         }
+        self.pins_view = false;
         let tx = self.tx.clone();
         self.stale = true;
         self.qid = self.host.query(
@@ -472,6 +493,7 @@ impl State {
             return Task::none();
         }
         self.busy = true;
+        self.last_action = action.to_owned();
         let host = Arc::clone(&self.host);
         let query = self.query.clone();
         let action = action.to_owned();
@@ -659,6 +681,7 @@ impl State {
             self.preview_on = true;
         }
         self.results = items;
+        self.pins_view = false;
         self.selected = 0;
         self.offset = 0;
         self.stale = false;
@@ -668,6 +691,40 @@ impl State {
             self.load_preview(),
             self.resize(),
         ])
+    }
+
+    /// Tras fijar o soltar: con la búsqueda vacía se recarga la lista; si no, solo cambia el
+    /// texto de la acción en la fila.
+    fn pin_toggled(&mut self) -> Task<Message> {
+        if self.query.trim().is_empty() {
+            return self.run_query();
+        }
+        if let Some(a) = self.results.get_mut(self.selected).and_then(|it| {
+            it.actions
+                .iter_mut()
+                .find(|a| a.id.as_str() == ActionId::PIN)
+        }) && a.title.starts_with("pins.")
+        {
+            a.title = if a.title == "pins.pin" {
+                "pins.unpin"
+            } else {
+                "pins.pin"
+            }
+            .into();
+        }
+        self.resize()
+    }
+
+    /// Alt+↑ ↓: mueve el fijado seleccionado y la selección con él.
+    fn shift_pin(&mut self, delta: isize) -> Task<Message> {
+        let Some(item) = self.results.get(self.selected).cloned() else {
+            return Task::none();
+        };
+        if !self.host.pin_shift(&item, delta) {
+            return Task::none();
+        }
+        self.selected = (self.selected as isize + delta).max(0) as usize;
+        self.run_query()
     }
 
     fn on_shown(&mut self) -> Task<Message> {
@@ -828,8 +885,37 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.hide();
                     Task::none()
                 }
+                // Alt+↑ ↓ cambian de puesto un fijado.
+                Key::Named(Named::ArrowDown | Named::ArrowUp) if m.alt() && s.pins_view => {
+                    let d = if matches!(key.as_ref(), Key::Named(Named::ArrowDown)) {
+                        down
+                    } else {
+                        -down
+                    };
+                    s.shift_pin(d)
+                }
                 Key::Named(Named::ArrowDown) => mv(s, down),
                 Key::Named(Named::ArrowUp) => mv(s, -down),
+                // Ctrl+1…9 abre el resultado N de los visibles (los fijados con la búsqueda
+                // vacía). Con Alt no: Windows manda también el carácter y se escribiría.
+                Key::Character(c)
+                    if m.control()
+                        && !m.alt()
+                        && matches!(c, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") =>
+                {
+                    let n = c.parse::<usize>().unwrap_or(1) - 1;
+                    let i = s.offset + n;
+                    if n >= s.visible_rows() {
+                        return Task::none();
+                    }
+                    let action = s
+                        .results
+                        .get(i)
+                        .and_then(|r| r.actions.first())
+                        .map(|a| a.id.0.clone())
+                        .unwrap_or_default();
+                    s.execute(i, &action)
+                }
                 Key::Named(Named::Tab) => mv(s, if m.shift() { -1 } else { 1 }),
                 Key::Named(Named::PageDown) => mv(s, page),
                 Key::Named(Named::PageUp) => mv(s, -page),
@@ -1072,6 +1158,9 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 }
                 Ok(ActionOutcome::Notify(n)) => {
                     s.notice = Some(n);
+                    if s.last_action == ActionId::PIN {
+                        return s.pin_toggled();
+                    }
                     s.resize()
                 }
                 Ok(ActionOutcome::ShowResults(items)) => s.show_results(items),
@@ -1701,6 +1790,10 @@ fn footer<'a>(s: &'a State, l: &Look) -> Element<'a, Message> {
             left = left.push(key_hint(l, "↵", tr(&a.title)));
         }
         let mut extra: Vec<(&'static str, &'static str)> = Vec::new();
+        if s.pins_view {
+            extra.push(("Ctrl+1…9", tr("pins.open_n")));
+            extra.push(("Alt+↑↓", tr("pins.move")));
+        }
         if item.has_action(ActionId::RUN_AS_ADMIN)
             && item.actions.first().map(|a| a.id.as_str()) != Some(ActionId::RUN_AS_ADMIN)
         {
@@ -1808,7 +1901,11 @@ fn view(s: &State) -> Element<'_, Message> {
         let mut list = column![].spacing(0);
         let mut prev: Option<&str> = None;
         for (i, item) in visible {
-            if groups && prev != Some(item.plugin_id.as_str()) {
+            if s.pins_view {
+                if prev.is_none() {
+                    list = list.push(group_header(&l, tr("pins.name").to_owned()));
+                }
+            } else if groups && prev != Some(item.plugin_id.as_str()) {
                 list = list.push(group_header(&l, group_label(&item.plugin_id)));
             }
             prev = Some(item.plugin_id.as_str());
@@ -1941,6 +2038,8 @@ pub(crate) fn run(host: Arc<dyn Host>, tx: UiSender, config: UiConfig) -> iced::
             hovered: None,
             panel: None,
             http: None,
+            pins_view: false,
+            last_action: String::new(),
             theme: iced_theme(&look),
         };
         let ready = window::oldest().then(|id| {
