@@ -24,6 +24,8 @@ impl ActionId {
     pub const EDIT: &'static str = "edit";
     /// Borrar, con confirmación (`Ctrl+D`).
     pub const DELETE: &'static str = "delete";
+    /// Fijar o soltar (`Ctrl+S`).
+    pub const PIN: &'static str = "pin";
 
     /// Crea un id a partir de un texto.
     pub fn new(s: impl Into<String>) -> Self {
@@ -93,6 +95,9 @@ pub struct ResultItem {
     pub payload: String,
     /// Archivo o carpeta que muestra el panel de previsualización (RF-017).
     pub preview: Option<PathBuf>,
+    /// Texto completo para el panel de previsualización cuando no hay archivo (portapapeles,
+    /// snippets, notas).
+    pub detail: Option<String>,
 }
 
 impl ResultItem {
@@ -110,6 +115,7 @@ impl ResultItem {
             actions: vec![Action::new(ActionId::OPEN, "action.open")],
             payload: String::new(),
             preview: None,
+            detail: None,
         }
     }
 

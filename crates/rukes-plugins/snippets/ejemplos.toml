@@ -1,0 +1,27 @@
+# Snippets de Rukes. Cada [[snippet]] tiene nombre, palabra clave (opcional) y contenido.
+# Escribe la palabra clave en Rukes (o «snip» para verlos todos) y pulsa Enter para insertarlo.
+#
+# Variables: {fecha} {hora} {fechahora} {portapapeles} {cursor}
+# Campos que se rellenan tras la palabra clave: {campo:Nombre}  (varios: separados por «;»)
+# Para escribir una llave literal usa {{ o }}.
+# También puedes crear archivos .md: un snippet por archivo (cabecera opcional ---name:/keyword:---).
+
+[[snippet]]
+name = "Firma de correo"
+keyword = "firma"
+content = """
+Saludos cordiales,
+{campo:Nombre}
+"""
+
+[[snippet]]
+name = "Fecha de hoy"
+keyword = "hoy"
+content = "{fecha}"
+
+[[snippet]]
+name = "Respuesta de reunión"
+keyword = "reunion"
+content = """
+Hola {campo:Persona}, ¿te va bien vernos el {campo:Día}? {cursor}
+"""

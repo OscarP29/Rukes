@@ -266,6 +266,7 @@ impl Plugin for AppsPlugin {
             keywords: Vec::new(),
             priority: self.settings.priority,
             global: true,
+            list_on_keyword: false,
         }
     }
 

@@ -205,6 +205,104 @@ pub struct Plugins {
     pub generators: Generators,
     /// Archivos y carpetas.
     pub files: Files,
+    /// Historial del portapapeles.
+    pub clipboard: Clipboard,
+    /// Snippets.
+    pub snippets: Snippets,
+    /// Notas, tareas y recordatorios.
+    pub notes: Notes,
+}
+
+/// `[plugins.clipboard]` (sección 5.10)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Clipboard {
+    /// Activo. Desactivado no se escucha el portapapeles ni se guarda nada (RF-104).
+    pub enabled: bool,
+    /// Palabra clave.
+    pub keyword: String,
+    /// Elementos guardados como mucho (los fijados no cuentan).
+    pub max_items: usize,
+    /// Días que se guarda cada elemento (0 = sin caducidad). Los fijados no caducan.
+    pub expire_days: u32,
+    /// `true`: Enter pega en la ventana anterior; `false`: solo copia.
+    pub paste: bool,
+    /// Ejecutables cuyas copias nunca se guardan (RF-102).
+    pub exclude: Vec<String>,
+}
+
+impl Default for Clipboard {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keyword: "clip".into(),
+            max_items: 500,
+            expire_days: 30,
+            paste: true,
+            exclude: [
+                "keepass.exe",
+                "keepassxc.exe",
+                "1password.exe",
+                "bitwarden.exe",
+                "enpass.exe",
+                "dashlane.exe",
+                "lastpass.exe",
+                "nordpass.exe",
+                "protonpass.exe",
+                "roboform.exe",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        }
+    }
+}
+
+/// `[plugins.snippets]` (sección 5.11)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Snippets {
+    /// Activo.
+    pub enabled: bool,
+    /// Palabra clave para listarlos todos.
+    pub keyword: String,
+    /// Carpeta. Vacío = `snippets` dentro de la configuración.
+    pub dir: String,
+    /// `true`: Enter inserta en la ventana anterior; `false`: solo copia.
+    pub paste: bool,
+}
+
+impl Default for Snippets {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keyword: "snip".into(),
+            dir: String::new(),
+            paste: true,
+        }
+    }
+}
+
+/// `[plugins.notes]` (sección 5.12)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Notes {
+    /// Activo (notas, tareas y recordatorios).
+    pub enabled: bool,
+    /// Archivo de notas. Vacío = `notes/notas.md` dentro de la configuración.
+    pub notes_file: String,
+    /// Archivo de tareas. Vacío = `notes/tareas.md` dentro de la configuración.
+    pub todo_file: String,
+}
+
+impl Default for Notes {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            notes_file: String::new(),
+            todo_file: String::new(),
+        }
+    }
 }
 
 /// `[plugins.calc]`

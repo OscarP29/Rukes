@@ -101,6 +101,7 @@ impl Plugin for WebPlugin {
             keywords: self.engines.keys().cloned().collect(),
             priority: 0.3,
             global: true,
+            list_on_keyword: false,
         }
     }
 

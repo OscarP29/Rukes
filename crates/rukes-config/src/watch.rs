@@ -60,13 +60,22 @@ pub struct DirWatcher {
 impl DirWatcher {
     /// Crea la carpeta si no existe y la vigila (sin subcarpetas).
     pub fn spawn(dir: &Path, on_change: impl Fn() + Send + 'static) -> notify::Result<Self> {
+        Self::spawn_ext(dir, &["toml"], on_change)
+    }
+
+    /// Como [`DirWatcher::spawn`], pero avisa de los archivos con estas extensiones.
+    pub fn spawn_ext(
+        dir: &Path,
+        exts: &'static [&'static str],
+        on_change: impl Fn() + Send + 'static,
+    ) -> notify::Result<Self> {
         let _ = std::fs::create_dir_all(dir);
         let (tx, rx) = crossbeam_channel::unbounded::<()>();
         let mut watcher = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
             if let Ok(ev) = ev
                 && ev.paths.iter().any(|p| {
                     p.extension()
-                        .is_some_and(|e| e.eq_ignore_ascii_case("toml"))
+                        .is_some_and(|e| exts.iter().any(|x| e.eq_ignore_ascii_case(x)))
                 })
             {
                 let _ = tx.send(());

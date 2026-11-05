@@ -27,6 +27,7 @@ action = "No se pudo completar la acción"
 config = "Error en la configuración"
 hotkey = "No se pudo registrar el atajo"
 lang = "Error en el archivo de idioma"
+snippets = "Error en un snippet"
 theme = "Error en el tema"
 
 [files]
@@ -164,3 +165,59 @@ gone = "La ventana ya no existe"
 minimized = "Ventana minimizada"
 name = "Ventanas"
 open = "Ventana abierta"
+
+[clip]
+chars = "{n} caracteres"
+copy = "Copiar"
+delete = "Borrar del historial"
+gone = "Ese elemento ya no está en el historial"
+name = "Portapapeles"
+paste = "Pegar"
+pin = "Fijar"
+pinned = "Fijado"
+unpin = "Quitar fijado"
+
+[snippets]
+copy = "Copiar"
+edit = "Editar archivo"
+gone = "El snippet ya no existe"
+insert = "Insertar"
+name = "Snippets"
+type_fields = "Escribe «{keyword} {fields}» para rellenar los campos"
+
+[time]
+ago = "hace {n} {unit}"
+just_now = "ahora mismo"
+
+[notes]
+add = "Añadir nota: {text}"
+header = "Notas"
+name = "Notas"
+open = "Abrir archivo de notas"
+recent = "Nota reciente · Enter abre el archivo"
+save = "Guardar nota"
+
+[remind]
+add = "Recordar: {text}"
+cancel = "Cancelar recordatorio"
+cancel_hint = "Ctrl+D cancela"
+default = "Recordatorio"
+help = "¿Cuándo? Escribe p. ej. «recordar 15m llamar a Ana»"
+help_sub = "Formatos: 30s, 15m, 1h30m, 2d o 14:30"
+in = "en {n} {unit}"
+name = "Recordatorios"
+none = "No hay recordatorios pendientes"
+save = "Crear recordatorio"
+set = "Te lo recordaré {when}"
+title = "Recordatorio de Rukes"
+
+[todo]
+add = "Añadir tarea: {text}"
+complete = "Completar"
+gone = "La tarea ya no está pendiente"
+header = "Tareas"
+name = "Tareas"
+none = "No hay tareas pendientes"
+open = "Abrir archivo de tareas"
+pending = "Pendiente · {n} en total"
+save = "Guardar tarea"

@@ -32,6 +32,10 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `uuid`, `pass 24`, `sha256 texto`, `b64 texto` | Generadores, hashes y codificadores (Enter copia) |
 | `gh issue Mi bug`, `hola Ana` | Tus scripts, con argumentos en línea |
 | `new script Backup`, `logs` | Crear un script desde una plantilla, historial de ejecuciones |
+| `clip`, `clip factura` | Historial del portapapeles: Enter pega en la ventana anterior |
+| `firma Ana`, `snip` | Snippets con variables y campos (`{fecha}`, `{cursor}`, `{campo:Nombre}`) |
+| `note idea`, `todo comprar pan`, `todo` | Notas y tareas en Markdown (Enter completa una tarea) |
+| `remind 15m llamar a Ana`, `recordar 14:30 reunión` | Recordatorios con notificación |
 
 | Tecla | Acción |
 | --- | --- |
@@ -41,8 +45,9 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `Ctrl+C` | Copiar la ruta |
 | `Ctrl+O` | Abrir con… (archivos) |
 | `Ctrl+T` | Abrir una terminal en la carpeta |
-| `Ctrl+E` | Editar el script |
-| `Ctrl+D` | Mover el script a la papelera (con confirmación) |
+| `Ctrl+E` | Editar el script, el snippet o el archivo de tareas |
+| `Ctrl+D` | Mover el script a la papelera (con confirmación), borrar del historial, cancelar un recordatorio |
+| `Ctrl+S` | Fijar o soltar un elemento del historial del portapapeles |
 | `Ctrl+P` | Mostrar u ocultar la vista previa |
 | `↑` `↓` / `Tab` / `Ctrl+J` `Ctrl+K` | Moverse por los resultados |
 | `Esc` | Ocultar |
@@ -55,6 +60,11 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 - **Idioma:** `language = "auto"`, `"es"` o `"en"`. Los textos están en
   `crates/rukes-core/lang`; un archivo en la carpeta `lang` de la configuración los cambia o
   añade un idioma.
+- **Portapapeles:** el historial se guarda cifrado (DPAPI) en `%LOCALAPPDATA%\Rukes\clipboard`.
+  No registra lo que los gestores de contraseñas marcan como sensible ni las apps de
+  `[plugins.clipboard] exclude`; `enabled = false` deja de escuchar el portapapeles.
+- **Snippets, notas y tareas:** carpeta `snippets` y archivos `notes/notas.md` y
+  `notes/tareas.md` junto a `config.toml` (configurables; sirven en Obsidian).
 - **Salir:** escribe «salir» en el launcher o usa el menú del icono de la bandeja.
 - **Iniciar con Windows:** `start_with_windows = true` en `[general]`.
 - **Logs:** `%LOCALAPPDATA%\Rukes\logs`.

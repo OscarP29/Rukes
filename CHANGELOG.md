@@ -4,6 +4,32 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 5: portapapeles, snippets y notas
+
+#### Añadido
+- Historial del portapapeles (`clip`): texto copiado con búsqueda, origen y antigüedad; Enter
+  pega en la ventana anterior (o copia con `paste = false`), `Ctrl+S` fija y `Ctrl+D` borra.
+  Los fijados no caducan ni cuentan para `max_items`; `expire_days` configurable.
+- No se registra el contenido que Windows marca como sensible
+  (`ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory = 0`,
+  `Clipboard Viewer Ignore`) ni lo copiado desde las apps de `exclude` (gestores de
+  contraseñas por defecto).
+- Historial cifrado con DPAPI en `%LOCALAPPDATA%\Rukes\clipboard\history.bin`. Con el plugin
+  desactivado no se escucha el portapapeles.
+- Snippets en `.toml` (`[[snippet]]`) o `.md` (cabecera opcional) en la carpeta `snippets`,
+  vigilada. Variables `{fecha}`, `{hora}`, `{fechahora}`, `{portapapeles}`, `{cursor}` y campos
+  `{campo:Nombre}` que se rellenan tras la palabra clave (`firma Ana`). Se insertan en la
+  ventana anterior y el portapapeles vuelve a su contenido anterior.
+- `note`/`nota`, `todo`/`tarea` y `remind`/`recordar`: notas con fecha y tareas en Markdown
+  compatible con Obsidian; recordatorios (`15m`, `1h30m`, `14:30`) con notificación de la
+  bandeja, persistentes, que avisan al arrancar si vencieron con Rukes cerrado.
+- `[plugins.clipboard]`, `[plugins.snippets]` y `[plugins.notes]` en la configuración.
+- Escribir solo la palabra clave de estos plugins (`clip`, `todo`, `recordar`) muestra su lista
+  arriba, junto a la búsqueda global.
+
+#### Pendiente
+- Expansión automática global de snippets (RF-113, prioridad C) e imágenes en el historial.
+
 ### Fase 4: temas, previsualización e i18n
 
 #### Añadido

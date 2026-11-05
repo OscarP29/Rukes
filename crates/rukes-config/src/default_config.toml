@@ -122,6 +122,49 @@ include_hidden = false
 # Caracteres mínimos para buscar archivos sin prefijo.
 min_chars = 3
 
+[plugins.clipboard]
+# Historial del portapapeles ("clip"): se guarda cifrado con DPAPI en
+# %LOCALAPPDATA%\Rukes\clipboard. Desactivado no se escucha el portapapeles.
+enabled = true
+keyword = "clip"
+# Elementos como mucho y días que se guardan (0 = sin caducidad). Los fijados (Ctrl+S) no
+# cuentan ni caducan.
+max_items = 500
+expire_days = 30
+# true: Enter pega en la ventana anterior. false: solo copia.
+paste = true
+# Nunca se guardan copias de estos programas. Tampoco el contenido que Windows marca como
+# sensible (gestores de contraseñas).
+exclude = [
+  "keepass.exe",
+  "keepassxc.exe",
+  "1password.exe",
+  "bitwarden.exe",
+  "enpass.exe",
+  "dashlane.exe",
+  "lastpass.exe",
+  "nordpass.exe",
+  "protonpass.exe",
+  "roboform.exe",
+]
+
+[plugins.snippets]
+# Textos reutilizables en archivos .toml o .md. Escribe su palabra clave (o "snip" para verlos
+# todos). Variables: {fecha} {hora} {portapapeles} {cursor} {campo:Nombre}.
+enabled = true
+keyword = "snip"
+# Carpeta. Vacío = "snippets" dentro de la carpeta de configuración. Admite ~ y %VAR%.
+dir = ""
+# true: Enter inserta en la ventana anterior. false: solo copia.
+paste = true
+
+[plugins.notes]
+# "note texto", "todo texto" y "remind 15m texto". Archivos Markdown normales (sirven en
+# Obsidian). Vacío = carpeta "notes" dentro de la configuración. Admiten ~ y %VAR%.
+enabled = true
+notes_file = ""
+todo_file = ""
+
 [scripts]
 # Scripts propios: cualquier archivo de la carpeta con una cabecera "@rukes.name" aparece en el
 # launcher sin reiniciar. "new script" crea uno desde una plantilla y "logs" muestra el historial.

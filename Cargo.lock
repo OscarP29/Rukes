@@ -2292,6 +2292,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "toml",
  "tracing",
  "uuid",
 ]

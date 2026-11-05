@@ -522,6 +522,7 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                 }
                 Key::Character("e") if m.control() => s.execute(s.selected, ActionId::EDIT),
                 Key::Character("d") if m.control() => s.execute(s.selected, ActionId::DELETE),
+                Key::Character("s") if m.control() => s.execute(s.selected, ActionId::PIN),
                 Key::Character("p") if m.control() => {
                     s.preview_on = !s.preview_on;
                     Task::batch([s.resize(), s.load_preview()])
@@ -567,6 +568,16 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
                     s.resize()
                 }
                 Ok(ActionOutcome::ShowResults(items)) => s.show_results(items),
+                Ok(ActionOutcome::Paste {
+                    text,
+                    cursor_left,
+                    restore,
+                }) => {
+                    // Primero se oculta (vuelve el foco a la ventana anterior) y luego se pega.
+                    s.hide();
+                    s.host.paste(&text, cursor_left, restore);
+                    Task::none()
+                }
                 Err(e) => {
                     s.notice = Some(format!("{}: {e}", tr("error.action")));
                     s.resize()
@@ -610,6 +621,11 @@ fn glyph<'a>(l: &Look, name: &str) -> Element<'a, Message> {
         "running" => "..",
         "error" => "!",
         "ok" => "ok",
+        "clipboard" => "cb",
+        "snippet" => "<>",
+        "note" => "md",
+        "todo" => "[ ]",
+        "remind" => "!t",
         _ => "·",
     };
     let (bg, radius) = (l.selection, (l.radius - 2.0).max(0.0));
@@ -835,7 +851,18 @@ fn preview_panel<'a>(s: &'a State, l: &Look) -> Element<'a, Message> {
                 if !item.subtitle.is_empty() {
                     col = col.push(txt(item.subtitle.as_str()).size(l.small()).color(l.muted));
                 }
-                col = col.push(txt(tr("preview.hint")).size(l.small() - 1.0).color(l.muted));
+                if let Some(d) = &item.detail {
+                    col = col.push(divider(l.divider, false));
+                    col = col.push(
+                        txt(d.as_str())
+                            .font(l.mono)
+                            .size(l.small() - 0.5)
+                            .color(l.fg)
+                            .width(Length::Fill),
+                    );
+                } else {
+                    col = col.push(txt(tr("preview.hint")).size(l.small() - 1.0).color(l.muted));
+                }
             }
             None => {}
         }

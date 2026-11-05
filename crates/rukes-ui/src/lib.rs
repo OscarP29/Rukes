@@ -39,6 +39,8 @@ pub trait Host: Send + Sync + 'static {
     fn icon(&self, icon: &Icon, px: u32) -> Option<IconRgba>;
     /// La ventana se acaba de mostrar.
     fn shown(&self) {}
+    /// Pega `text` en la ventana que tenía el foco (la ventana ya se ocultó). No bloquea.
+    fn paste(&self, _text: &str, _cursor_left: usize, _restore: bool) {}
     /// Contenido del panel de previsualización de un archivo o carpeta (bloqueante, RF-017).
     fn preview(&self, _path: &Path) -> Option<Preview> {
         None

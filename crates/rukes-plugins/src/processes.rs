@@ -320,6 +320,7 @@ impl Plugin for ProcessesPlugin {
             keywords: vec!["kill".into(), "ps".into(), "proc".into()],
             priority: 0.3 + self.priority,
             global: false,
+            list_on_keyword: false,
         }
     }
 

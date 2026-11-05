@@ -112,6 +112,23 @@ Binario `rukes.exe` release: **12,2 MB** (8,5 MB en la fase 2; Rhai añade ~3,7 
 - Las medidas se tomaron con una copia portable (`portable.txt`) para no tocar la configuración
   del usuario.
 
+## Fase 5: portapapeles, snippets y notas (2026-11-04)
+
+Binario `rukes.exe` release: **12 984 320 bytes**.
+
+| Métrica | Objetivo | Medido | Estado |
+| --- | --- | --- | --- |
+| RNF-001 RAM en reposo (oculta) | ≤ 20 MB working set | **1,6 MB WS** tras recorte · 15,1 MB privada | ✅ |
+| RNF-005 Arranque hasta «listo» | ≤ 300 ms | 124–168 ms (3 arranques) | ✅ |
+
+**Notas:**
+
+- Hilos nuevos en reposo: escucha del portapapeles (bloqueada en `GetMessageW`), guardado del
+  historial y recordatorios (bloqueados en un canal; los recordatorios despiertan como mucho
+  una vez por minuto), y el vigilante de la carpeta `snippets`.
+- El historial se guarda cifrado agrupando los cambios (800 ms) y al salir.
+- Medido con una copia portable (`portable.txt`) para no tocar la configuración del usuario.
+
 ## Fase 4: temas, previsualización e i18n (2026-11-04)
 
 Binario `rukes.exe` release: **12,6 MB** (12,2 MB en la fase 3).

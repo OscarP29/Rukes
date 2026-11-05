@@ -69,6 +69,7 @@ impl Plugin for WindowsPlugin {
             // Por debajo de las apps: al escribir «chrome» primero sale la app.
             priority: -0.1 + self.priority,
             global: true,
+            list_on_keyword: false,
         }
     }
 

@@ -3,17 +3,28 @@
 use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
-    SetClipboardData,
+    RegisterClipboardFormatW, SetClipboardData,
 };
 use windows::Win32::System::Memory::{
     GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
 };
 use windows::Win32::System::Ole::CF_UNICODETEXT;
+use windows::core::w;
 
 use crate::{Context as _, Result};
 
 /// Copia texto al portapapeles.
 pub fn set_text(text: &str) -> Result<()> {
+    set(text, false)
+}
+
+/// Copia texto marcándolo para que los historiales (el de Windows y el de Rukes) no lo
+/// registren: se usa al pegar desde el historial o al insertar un snippet.
+pub fn set_text_private(text: &str) -> Result<()> {
+    set(text, true)
+}
+
+fn set(text: &str, private: bool) -> Result<()> {
     let data = crate::wide(text);
     let bytes = data.len() * 2;
     // SAFETY: secuencia estándar Open/Empty/Set/Close. La memoria global pasa a ser del sistema
@@ -33,6 +44,14 @@ pub fn set_text(text: &str) -> Result<()> {
             if let Err(e) = SetClipboardData(u32::from(CF_UNICODETEXT.0), Some(HANDLE(mem.0))) {
                 let _ = GlobalFree(Some(mem));
                 return Err(e).ctx("SetClipboardData");
+            }
+            if private {
+                let fmt =
+                    RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing"));
+                let flag: HGLOBAL = GlobalAlloc(GMEM_MOVEABLE, 4).ctx("GlobalAlloc")?;
+                if SetClipboardData(fmt, Some(HANDLE(flag.0))).is_err() {
+                    let _ = GlobalFree(Some(flag));
+                }
             }
             Ok(())
         })();

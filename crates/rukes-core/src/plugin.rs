@@ -17,6 +17,9 @@ pub struct PluginMetadata {
     pub priority: f32,
     /// `true` si participa en las búsquedas sin prefijo.
     pub global: bool,
+    /// `true`: si la consulta es justo una de sus palabras clave (`clip`, sin espacio), además
+    /// de la búsqueda global se muestra su lista, arriba.
+    pub list_on_keyword: bool,
 }
 
 /// Qué hacer con la ventana tras ejecutar una acción.
@@ -33,6 +36,15 @@ pub enum ActionOutcome {
     /// Sustituir la lista por estos resultados (confirmaciones, submenús). El motor rellena su
     /// `plugin_id`.
     ShowResults(Vec<crate::ResultItem>),
+    /// Ocultar el launcher y pegar `text` en la ventana que tenía el foco (RF-103, RF-112).
+    Paste {
+        /// Texto.
+        text: String,
+        /// Pulsaciones de `←` tras pegar (posición de `{cursor}` en un snippet).
+        cursor_left: usize,
+        /// Devolver después al portapapeles lo que había antes (snippets).
+        restore: bool,
+    },
 }
 
 /// Error de un plugin.

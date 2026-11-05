@@ -547,6 +547,7 @@ impl Plugin for CalcPlugin {
             keywords: Vec::new(),
             priority: 0.5,
             global: true,
+            list_on_keyword: false,
         }
     }
 

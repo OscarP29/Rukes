@@ -72,6 +72,28 @@ impl Paths {
         self.config_dir.join("lang")
     }
 
+    /// Historial cifrado del portapapeles (`%LOCALAPPDATA%\Rukes\clipboard`).
+    pub fn clipboard_dir(&self) -> PathBuf {
+        self.state_dir
+            .parent()
+            .map_or_else(|| self.state_dir.join("clipboard"), |p| p.join("clipboard"))
+    }
+
+    /// Snippets por defecto.
+    pub fn snippets_dir(&self) -> PathBuf {
+        self.config_dir.join("snippets")
+    }
+
+    /// Notas y tareas por defecto.
+    pub fn notes_dir(&self) -> PathBuf {
+        self.config_dir.join("notes")
+    }
+
+    /// Recordatorios pendientes.
+    pub fn reminders_file(&self) -> PathBuf {
+        self.state_dir.join("reminders.json")
+    }
+
     /// Archivo de frecency.
     pub fn frecency_file(&self) -> PathBuf {
         self.state_dir.join("frecency.json")

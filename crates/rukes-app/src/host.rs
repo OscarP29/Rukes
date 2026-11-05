@@ -4,16 +4,19 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
+use rukes_config::DirWatcher;
 use rukes_config::theme::Theme;
 use rukes_config::{Config, ConfigError, Hotkey};
 use rukes_core::i18n::tr;
 use rukes_core::{ActionOutcome, Engine, Icon, Plugin, QueryId, ResultItem};
+use rukes_platform::clipwatch::{Change, ClipboardWatcher};
 use rukes_platform::hotkey::{self, HotkeyManager};
 use rukes_platform::tray::{MenuEntry, Tray};
 use rukes_platform::{autostart, dwm, icons, window};
 use rukes_plugins::{
-    AppsPlugin, CalcPlugin, FileIndex, FilesPlugin, GeneratorsPlugin, ProcessesPlugin, ShellPlugin,
-    ShellSettings, SystemCommandsPlugin, WebPlugin, WindowsPlugin,
+    AppsPlugin, CalcPlugin, ClipHistory, ClipboardPlugin, FileIndex, FilesPlugin, GeneratorsPlugin,
+    NotesPlugin, ProcessesPlugin, RemindPlugin, RemindStore, ShellPlugin, ShellSettings,
+    SnippetStore, SnippetsPlugin, SystemCommandsPlugin, TodoPlugin, WebPlugin, WindowsPlugin,
 };
 use rukes_script::{Catalog, Hooks, RunContext, Runs, Scripts, ScriptsPlugin};
 use rukes_ui::{Host, IconRgba, Preview, Sink, UiConfig, UiEvent, UiSender, UiStyle};
@@ -87,7 +90,20 @@ pub struct AppHost {
     /// Historial de ejecuciones de scripts.
     runs: Mutex<Option<Arc<Runs>>>,
     icon_cache: IconCache,
+    /// Historial del portapapeles y su escucha (se sueltan al desactivar el plugin, RF-104).
+    clip: Mutex<Option<(Arc<ClipHistory>, ClipboardWatcher)>>,
+    /// Snippets con su carpeta y su vigilante.
+    snippets: Mutex<Option<SnippetSlot>>,
+    /// Recordatorios (un solo hilo de aviso aunque se recarguen los plugins).
+    reminders: Mutex<Option<Arc<RemindStore>>>,
 }
+
+type SnippetSlot = (std::path::PathBuf, Arc<SnippetStore>, Option<DirWatcher>);
+
+/// Espera a que la ventana anterior recupere el foco antes de pegar.
+const PASTE_DELAY: Duration = Duration::from_millis(80);
+/// Espera tras pegar antes de devolver el portapapeles anterior (la app destino lo lee antes).
+const RESTORE_DELAY: Duration = Duration::from_millis(400);
 
 type ScriptCatalog = (
     std::path::PathBuf,
@@ -128,6 +144,9 @@ impl AppHost {
             paused: AtomicBool::new(false),
             scripts: Mutex::new(None),
             runs: Mutex::new(None),
+            clip: Mutex::new(None),
+            snippets: Mutex::new(None),
+            reminders: Mutex::new(None),
         }
     }
 
@@ -290,6 +309,7 @@ impl AppHost {
             *files = None;
         }
         drop(files);
+        self.text_plugins(config, &mut plugins);
         if config.scripts.enabled {
             plugins.push(Arc::new(self.scripts_plugin(config)));
         } else {
@@ -307,6 +327,123 @@ impl AppHost {
             on_reload: Box::new(move || reload_engine.refresh_all()),
         }));
         self.engine.set_plugins(plugins);
+    }
+
+    /// Portapapeles, snippets, notas, tareas y recordatorios (secciones 5.10 a 5.12).
+    fn text_plugins(self: &Arc<Self>, config: &Config, plugins: &mut Vec<Arc<dyn Plugin>>) {
+        let c = &config.plugins.clipboard;
+        let mut clip = self.clip.lock().unwrap_or_else(|p| p.into_inner());
+        if c.enabled {
+            let s = settings::clipboard(config);
+            let history = match clip.as_ref() {
+                Some((h, _)) => {
+                    h.set_settings(s);
+                    Some(Arc::clone(h))
+                }
+                None => {
+                    let h = ClipHistory::open(self.paths.clipboard_dir().join("history.bin"), s);
+                    let rec = Arc::downgrade(&h);
+                    let watcher = ClipboardWatcher::spawn(move |change| match change {
+                        Change::Text(c) => {
+                            if let Some(h) = rec.upgrade() {
+                                h.record(&c.text, c.source.as_deref());
+                            }
+                        }
+                        Change::Sensitive => tracing::debug!("copia sensible ignorada"),
+                        Change::Other => {}
+                    });
+                    match watcher {
+                        Ok(w) => {
+                            *clip = Some((Arc::clone(&h), w));
+                            Some(h)
+                        }
+                        Err(e) => {
+                            tracing::warn!(%e, "no se pudo escuchar el portapapeles");
+                            None
+                        }
+                    }
+                }
+            };
+            if let Some(history) = history {
+                plugins.push(Arc::new(ClipboardPlugin {
+                    history,
+                    keyword: c.keyword.clone(),
+                }));
+            }
+        } else if let Some((h, watcher)) = clip.take() {
+            drop(watcher);
+            h.save_now();
+        }
+        drop(clip);
+
+        let sn = &config.plugins.snippets;
+        let mut slot = self.snippets.lock().unwrap_or_else(|p| p.into_inner());
+        if sn.enabled {
+            let dir = settings::snippets_dir(config, &self.paths);
+            let store = match slot.as_ref() {
+                Some((d, s, _)) if *d == dir => Arc::clone(s),
+                _ => {
+                    let (store, errors) = SnippetStore::open(dir.clone());
+                    self.snippet_errors(&errors);
+                    let (weak, me) = (Arc::downgrade(&store), Arc::downgrade(self));
+                    let watcher = DirWatcher::spawn_ext(&dir, &["toml", "md"], move || {
+                        if let (Some(s), Some(h)) = (weak.upgrade(), me.upgrade()) {
+                            h.snippet_errors(&s.reload());
+                        }
+                    })
+                    .map_err(|e| tracing::warn!(%e, "no se pudo vigilar la carpeta de snippets"))
+                    .ok();
+                    *slot = Some((dir, Arc::clone(&store), watcher));
+                    store
+                }
+            };
+            plugins.push(Arc::new(SnippetsPlugin {
+                store,
+                keyword: sn.keyword.clone(),
+                paste: sn.paste,
+            }));
+        } else {
+            *slot = None;
+        }
+        drop(slot);
+
+        let mut reminders = self.reminders.lock().unwrap_or_else(|p| p.into_inner());
+        if config.plugins.notes.enabled {
+            let (notes, todo) = settings::notes_files(config, &self.paths);
+            plugins.push(Arc::new(NotesPlugin { file: notes }));
+            plugins.push(Arc::new(TodoPlugin { file: todo }));
+            let store = reminders.get_or_insert_with(|| {
+                let s = RemindStore::open(self.paths.reminders_file());
+                // Con la bandeja ya creada se avisa por ella; si no, `start_tray` lo conecta.
+                if self.tray.lock().is_ok_and(|t| t.is_some()) {
+                    self.connect_reminders(&s);
+                }
+                s
+            });
+            plugins.push(Arc::new(RemindPlugin {
+                store: Arc::clone(store),
+            }));
+        } else {
+            *reminders = None;
+        }
+    }
+
+    fn connect_reminders(self: &Arc<Self>, store: &RemindStore) {
+        let me = Arc::downgrade(self);
+        store.set_notifier(Arc::new(move |title: &str, body: &str| {
+            if let Some(h) = me.upgrade() {
+                h.system_notify(title, body, false);
+            }
+        }));
+    }
+
+    fn snippet_errors(&self, errors: &[String]) {
+        for e in errors {
+            tracing::warn!(error = %e, "snippet no válido");
+        }
+        if let Some(e) = errors.first() {
+            self.notice(format!("{}: {e}", tr("error.snippets")));
+        }
     }
 
     /// Plugin de scripts (sección 5.13). El catálogo y su watcher se conservan entre recargas si
@@ -592,6 +729,15 @@ impl AppHost {
             Ok(t) => *self.tray.lock().unwrap_or_else(|p| p.into_inner()) = Some(t),
             Err(e) => tracing::warn!(%e, "no se pudo crear el icono de la bandeja"),
         }
+        // Los recordatorios vencidos con Rukes cerrado avisan ahora (RF-123).
+        let store = self
+            .reminders
+            .lock()
+            .ok()
+            .and_then(|r| r.as_ref().map(Arc::clone));
+        if let Some(s) = store {
+            self.connect_reminders(&s);
+        }
     }
 
     fn tray_command(self: &Arc<Self>, id: u16) {
@@ -640,6 +786,14 @@ impl AppHost {
     }
 
     pub fn shutdown(&self) {
+        let clip = self
+            .clip
+            .lock()
+            .ok()
+            .and_then(|c| c.as_ref().map(|(h, _)| Arc::clone(h)));
+        if let Some(h) = clip {
+            h.save_now();
+        }
         if let Err(e) = self.engine.save_frecency(&self.paths.frecency_file()) {
             tracing::warn!(%e, "no se pudo guardar la frecency al salir");
         }
@@ -686,6 +840,42 @@ impl Host for AppHost {
 
     fn hide(&self) {
         self.hide_now();
+    }
+
+    /// Pega en la ventana anterior (RF-103, RF-112). La UI ya se ocultó y devolvió el foco.
+    fn paste(&self, text: &str, cursor_left: usize, restore: bool) {
+        use rukes_platform::clipboard;
+        let text = text.to_owned();
+        let spawned = std::thread::Builder::new()
+            .name("rukes-paste".into())
+            .spawn(move || {
+                let old = if restore {
+                    clipboard::get_text(rukes_plugins::clipboard::MAX_CHARS)
+                } else {
+                    None
+                };
+                // Los snippets no deben acabar en el historial del portapapeles.
+                let set = if restore {
+                    clipboard::set_text_private(&text)
+                } else {
+                    clipboard::set_text(&text)
+                };
+                if let Err(e) = set {
+                    tracing::warn!(%e, "no se pudo preparar el texto para pegar");
+                    return;
+                }
+                std::thread::sleep(PASTE_DELAY);
+                if !rukes_platform::input::paste(cursor_left) {
+                    tracing::warn!("Windows bloqueó el pegado (¿ventana de administrador?)");
+                }
+                if let Some(old) = old {
+                    std::thread::sleep(RESTORE_DELAY);
+                    let _ = clipboard::set_text_private(&old);
+                }
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(%e, "no se pudo pegar");
+        }
     }
 
     fn icon(&self, icon: &Icon, px: u32) -> Option<IconRgba> {

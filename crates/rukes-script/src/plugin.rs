@@ -907,6 +907,7 @@ impl Plugin for Scripts {
             keywords,
             priority: self.0.settings.priority,
             global: true,
+            list_on_keyword: false,
         }
     }
 

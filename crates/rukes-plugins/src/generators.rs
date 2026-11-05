@@ -377,6 +377,7 @@ impl Plugin for GeneratorsPlugin {
             keywords: Vec::new(),
             priority: 0.4,
             global: true,
+            list_on_keyword: false,
         }
     }
 

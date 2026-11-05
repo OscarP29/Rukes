@@ -121,6 +121,7 @@ impl Plugin for ShellPlugin {
             keywords: Vec::new(),
             priority: 0.5,
             global: false,
+            list_on_keyword: false,
         }
     }
 
@@ -259,6 +260,7 @@ impl Plugin for SystemCommandsPlugin {
             keywords: Vec::new(),
             priority: 0.0,
             global: true,
+            list_on_keyword: false,
         }
     }
 

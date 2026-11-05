@@ -80,6 +80,43 @@ pub fn scripts_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path:
     }
 }
 
+/// Ruta configurada (admite `~` y `%VAR%`) o `default` si está vacía.
+fn path_or(s: &str, default: std::path::PathBuf) -> std::path::PathBuf {
+    let s = s.trim();
+    if s.is_empty() {
+        default
+    } else {
+        rukes_script::args::expand_path(s)
+    }
+}
+
+pub fn clipboard(c: &Config) -> rukes_plugins::ClipSettings {
+    let s = &c.plugins.clipboard;
+    rukes_plugins::ClipSettings {
+        max_items: s.max_items,
+        expire_days: s.expire_days,
+        exclude: s.exclude.iter().map(|e| e.trim().to_lowercase()).collect(),
+        paste: s.paste,
+    }
+}
+
+/// Carpeta de snippets (RF-110).
+pub fn snippets_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path::PathBuf {
+    path_or(&c.plugins.snippets.dir, paths.snippets_dir())
+}
+
+/// Archivos de notas y de tareas (RF-120, RF-121).
+pub fn notes_files(
+    c: &Config,
+    paths: &rukes_config::paths::Paths,
+) -> (std::path::PathBuf, std::path::PathBuf) {
+    let n = &c.plugins.notes;
+    (
+        path_or(&n.notes_file, paths.notes_dir().join("notas.md")),
+        path_or(&n.todo_file, paths.notes_dir().join("tareas.md")),
+    )
+}
+
 pub fn scripts(c: &Config) -> rukes_script::Settings {
     let s = &c.scripts;
     rukes_script::Settings {

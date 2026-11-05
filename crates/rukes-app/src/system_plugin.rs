@@ -61,6 +61,7 @@ impl Plugin for SystemPlugin {
             keywords: Vec::new(),
             priority: -0.05,
             global: true,
+            list_on_keyword: false,
         }
     }
 

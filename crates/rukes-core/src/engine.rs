@@ -58,6 +58,8 @@ struct Job {
     query: Query,
     cancel: CancelToken,
     sink: Sink,
+    /// La consulta es exactamente la palabra clave del plugin: sus resultados van arriba.
+    boost: bool,
 }
 
 struct Shared {
@@ -169,7 +171,13 @@ impl Engine {
             *cur = cancel.clone();
         }
         let plugins = self.snapshot();
-        for (idx, text, targeted) in route(&plugins, raw) {
+        for Route {
+            idx,
+            text,
+            targeted,
+            boost,
+        } in route(&plugins, raw)
+        {
             let Some(reg) = plugins.get(idx) else {
                 continue;
             };
@@ -184,6 +192,7 @@ impl Engine {
                 },
                 cancel: cancel.clone(),
                 sink: Arc::clone(&sink),
+                boost,
             };
             if self.jobs.send(job).is_err() {
                 tracing::error!("el pool de búsqueda no está disponible");
@@ -261,8 +270,28 @@ impl Engine {
     }
 }
 
-/// Decide qué plugins reciben la consulta y con qué texto: `(índice, texto, dirigido)`.
-fn route(plugins: &[Registered], raw: &str) -> Vec<(usize, String, bool)> {
+/// A qué plugin va una consulta.
+#[derive(Debug, PartialEq, Eq)]
+struct Route {
+    idx: usize,
+    text: String,
+    targeted: bool,
+    boost: bool,
+}
+
+impl Route {
+    fn new(idx: usize, text: String, targeted: bool) -> Self {
+        Self {
+            idx,
+            text,
+            targeted,
+            boost: false,
+        }
+    }
+}
+
+/// Decide qué plugins reciben la consulta y con qué texto.
+fn route(plugins: &[Registered], raw: &str) -> Vec<Route> {
     let trimmed = raw.trim_start();
     // 1. Prefijo (el más largo gana: `f:` antes que `f`).
     let by_prefix = plugins
@@ -274,7 +303,7 @@ fn route(plugins: &[Registered], raw: &str) -> Vec<(usize, String, bool)> {
         })
         .max_by_key(|(_, len)| *len);
     if let Some((i, len)) = by_prefix {
-        return vec![(i, trimmed[len..].trim().to_owned(), true)];
+        return vec![Route::new(i, trimmed[len..].trim().to_owned(), true)];
     }
     // 2. Palabra clave al principio, seguida de un espacio (`g` a secas sigue siendo una búsqueda
     // global; `g ` ya va al buscador web). Puede tener varias palabras (`gh issue`, alias de
@@ -286,19 +315,38 @@ fn route(plugins: &[Registered], raw: &str) -> Vec<(usize, String, bool)> {
         .filter_map(|(i, k)| strip_keyword(trimmed, k).map(|rest| (i, k.len(), rest)))
         .max_by_key(|(_, len, _)| *len);
     if let Some((i, _, rest)) = by_keyword {
-        return vec![(i, rest.trim().to_owned(), true)];
+        return vec![Route::new(i, rest.trim().to_owned(), true)];
     }
     // 3. Plugins globales.
     let text = raw.trim();
     if text.is_empty() {
         return Vec::new();
     }
-    plugins
+    // 4. La consulta es justo una palabra clave (`clip`): además de la búsqueda global, su
+    // plugin muestra su lista arriba. Así no hace falta el espacio para verla.
+    let exact: Vec<usize> = plugins
         .iter()
         .enumerate()
-        .filter(|(_, r)| r.meta.global)
-        .map(|(i, _)| (i, text.to_owned(), false))
-        .collect()
+        .filter(|(_, r)| {
+            r.meta.list_on_keyword
+                && r.meta
+                    .keywords
+                    .iter()
+                    .any(|k| !k.is_empty() && k.to_lowercase() == text.to_lowercase())
+        })
+        .map(|(i, _)| i)
+        .collect();
+    let mut out: Vec<Route> = plugins
+        .iter()
+        .enumerate()
+        .filter(|(i, r)| r.meta.global && !exact.contains(i))
+        .map(|(i, _)| Route::new(i, text.to_owned(), false))
+        .collect();
+    out.extend(exact.into_iter().map(|i| Route {
+        boost: true,
+        ..Route::new(i, String::new(), true)
+    }));
+    out
 }
 
 /// Si `text` empieza por la palabra clave `keyword` (sin distinguir mayúsculas) seguida de un
@@ -334,6 +382,7 @@ fn worker(rx: &Receiver<Job>, shared: &Shared) {
             query,
             cancel,
             sink,
+            boost,
         } = job;
         let mut deliver = |mut items: Vec<ResultItem>| {
             // Los lotes vacíos se entregan igualmente: indican a la UI que el plugin terminó
@@ -352,7 +401,7 @@ fn worker(rx: &Receiver<Job>, shared: &Shared) {
                             fuzzy: it.fuzzy,
                             item_frecency: f.item_score(&key, now),
                             query_frecency: f.query_score(&query.raw, &key, now),
-                            alias_match: it.alias_match,
+                            alias_match: it.alias_match || boost,
                             priority: meta.priority,
                         },
                         weight,
@@ -415,6 +464,7 @@ mod tests {
                 keywords: self.keywords.clone(),
                 priority: 0.0,
                 global: self.global,
+                list_on_keyword: !self.global,
             }
         }
         fn query(&self, q: &Query, cancel: &CancelToken, sink: &mut dyn FnMut(Vec<ResultItem>)) {
@@ -519,10 +569,14 @@ mod tests {
         assert_eq!(b[0].plugin_id, "web");
         let b = collect(&e2, "DÍA mi", Duration::from_millis(200));
         assert_eq!(b[0].plugin_id, "scripts");
-        // Sin espacio, la palabra clave no dirige la búsqueda.
-        let b = collect(&e, "kill", Duration::from_millis(200));
-        assert_eq!(b.len(), 1);
+        // Sin espacio, la palabra clave no dirige la búsqueda: se busca globalmente y además su
+        // plugin muestra su lista, arriba.
+        let mut b = collect(&e, "kill", Duration::from_millis(200));
+        assert_eq!(b.len(), 2);
+        b.sort_by(|x, y| x.plugin_id.cmp(&y.plugin_id));
         assert_eq!(b[0].plugin_id, "apps");
+        assert_eq!(b[1].plugin_id, "proc");
+        assert!(b[1].items[0].score > b[0].items[0].score);
     }
 
     #[test]

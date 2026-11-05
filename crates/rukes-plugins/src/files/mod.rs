@@ -405,6 +405,7 @@ impl Plugin for FilesPlugin {
             keywords: Vec::new(),
             priority: self.index.settings.priority,
             global: self.kind == Kind::Any,
+            list_on_keyword: false,
         }
     }
 

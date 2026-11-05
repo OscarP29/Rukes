@@ -1,6 +1,6 @@
 //! Utilidades compartidas por los plugins.
 
-use rukes_core::i18n::tr;
+use rukes_core::i18n::{tr, trf};
 use rukes_core::{ActionOutcome, PluginError};
 
 /// Copia texto al portapapeles y devuelve el aviso «Copiado».
@@ -10,6 +10,29 @@ pub fn copy(text: &str) -> Result<ActionOutcome, PluginError> {
             ActionOutcome::Notify(format!("{} · {}", tr("notify.copied"), ellipsis(text, 60)))
         })
         .map_err(|e| PluginError::Failed(e.to_string()))
+}
+
+/// Segundos Unix actuales.
+pub fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// «hace 5 min», «5 min ago».
+pub fn ago(unix: u64) -> String {
+    let s = now_unix().saturating_sub(unix);
+    if s < 60 {
+        return tr("time.just_now").into();
+    }
+    let (n, unit) = if s < 3600 {
+        (s / 60, "min")
+    } else if s < 86_400 {
+        (s / 3600, "h")
+    } else {
+        (s / 86_400, "d")
+    };
+    trf("time.ago", &[("n", &n), ("unit", &unit)])
 }
 
 /// Recorta un texto largo para mostrarlo en una línea.
