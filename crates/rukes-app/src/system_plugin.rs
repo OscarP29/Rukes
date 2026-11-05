@@ -21,6 +21,21 @@ pub fn open_config(file: &std::path::Path) -> rukes_platform::Result<()> {
     })
 }
 
+/// Abre una carpeta de Rukes en el Explorador (la crea si aún no existe) o copia su ruta.
+fn open_folder(dir: &Path, action: &str) -> Result<ActionOutcome, PluginError> {
+    let fail = |e: String| PluginError::Failed(e);
+    match action {
+        rukes_core::ActionId::OPEN => {
+            std::fs::create_dir_all(dir).map_err(|e| fail(e.to_string()))?;
+            shell::launch(&dir.to_string_lossy(), None, None, Verb::Open)
+                .map_err(|e| fail(e.to_string()))?;
+            Ok(ActionOutcome::Hide)
+        }
+        rukes_core::ActionId::COPY_PATH => rukes_plugins::util::copy(&dir.to_string_lossy()),
+        other => Err(PluginError::UnsupportedAction(other.into())),
+    }
+}
+
 type Callback = Box<dyn Fn() + Send + Sync>;
 
 /// Marca de tiempo para nombres de carpeta: `20261104-1530`.
@@ -61,6 +76,9 @@ fn import_target(text: &str) -> Option<PathBuf> {
 pub struct SystemPlugin {
     pub config_file: PathBuf,
     pub paths: rukes_config::paths::Paths,
+    /// Carpetas de Rukes que se abren desde el launcher: `(id, ruta)`; el título es la clave
+    /// `system.folder_<id>`.
+    pub folders: Vec<(&'static str, PathBuf)>,
     pub on_quit: Callback,
     pub on_reload: Callback,
 }
@@ -105,6 +123,50 @@ const COMMANDS: [(&str, &str, &str, &str); 6] = [
     ),
 ];
 
+/// Palabras que piden la lista de carpetas (`carpetas`, `carpeta scripts`, `folder themes`).
+const FOLDER_WORDS: [&str; 5] = ["carpeta", "carpetas", "folder", "folders", "dir"];
+
+/// Si la consulta empieza por una palabra de [`FOLDER_WORDS`], lo que va detrás.
+fn folder_filter(text: &str) -> Option<&str> {
+    let t = text.trim_start();
+    let word = t.split_whitespace().next()?;
+    FOLDER_WORDS
+        .iter()
+        .any(|w| w.eq_ignore_ascii_case(word))
+        .then(|| t[word.len()..].trim())
+}
+
+impl SystemPlugin {
+    /// Resultados de las carpetas. Con `filter` (tras «carpeta») salen todas o las que
+    /// coincidan; sin él, solo las que coincidan bien con el título.
+    fn folder_items(&self, text: &str) -> Vec<ResultItem> {
+        let filter = folder_filter(text);
+        let mut f = Fuzzy::new(filter.unwrap_or(text));
+        self.folders
+            .iter()
+            .filter_map(|(id, path)| {
+                let title = tr(&format!("system.folder_{id}"));
+                let score = match filter {
+                    Some("") => 1.0,
+                    Some(_) => f.score(title).or_else(|| f.score(id))?.max(0.5),
+                    None => f.score(title).filter(|s| *s >= 0.5)?,
+                };
+                let mut it = ResultItem::new(format!("folder:{id}"), title);
+                it.subtitle = path.display().to_string();
+                it.icon = Icon::Named("folder".into());
+                it.fuzzy = score;
+                it.payload = path.to_string_lossy().into_owned();
+                it.preview = path.is_dir().then(|| path.clone());
+                it.actions.push(rukes_core::Action::new(
+                    rukes_core::ActionId::COPY_PATH,
+                    "action.copy_path",
+                ));
+                Some(it)
+            })
+            .collect()
+    }
+}
+
 impl Plugin for SystemPlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
@@ -135,8 +197,13 @@ impl Plugin for SystemPlugin {
             sink(vec![it]);
             return;
         }
+        let folders = self.folder_items(&q.text);
+        if folder_filter(&q.text).is_some() {
+            sink(folders);
+            return;
+        }
         let mut f = Fuzzy::new(&q.text);
-        let items = COMMANDS
+        let mut items: Vec<ResultItem> = COMMANDS
             .iter()
             .filter_map(|(id, title, sub, extra)| {
                 let title = tr(title);
@@ -166,10 +233,14 @@ impl Plugin for SystemPlugin {
                 Some(it)
             })
             .collect();
+        items.extend(folders);
         sink(items);
     }
 
     fn execute(&self, item: &ResultItem, action: &str) -> Result<ActionOutcome, PluginError> {
+        if item.id.starts_with("folder:") {
+            return open_folder(Path::new(&item.payload), action);
+        }
         if action != rukes_core::ActionId::OPEN {
             return Err(PluginError::UnsupportedAction(action.into()));
         }
@@ -211,5 +282,38 @@ impl Plugin for SystemPlugin {
             }
             other => Err(PluginError::Failed(format!("comando desconocido: {other}"))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plugin() -> SystemPlugin {
+        let paths = rukes_config::paths::Paths::under(Path::new("C:/r"), true);
+        SystemPlugin {
+            config_file: paths.config_file(),
+            folders: vec![
+                ("workflows", paths.workflows_dir()),
+                ("scripts", PathBuf::from("C:/r/scripts")),
+                ("themes", paths.themes_dir()),
+            ],
+            paths,
+            on_quit: Box::new(|| {}),
+            on_reload: Box::new(|| {}),
+        }
+    }
+
+    #[test]
+    fn folder_word_lists_and_filters() {
+        assert_eq!(folder_filter("carpetas"), Some(""));
+        assert_eq!(folder_filter("Folder  scr"), Some("scr"));
+        assert_eq!(folder_filter("carpet"), None);
+        let p = plugin();
+        assert_eq!(p.folder_items("carpetas").len(), 3);
+        let only = p.folder_items("carpeta scri");
+        assert_eq!(only.len(), 1);
+        assert_eq!(only[0].id, "folder:scripts");
+        assert_eq!(only[0].payload, "C:/r/scripts");
     }
 }

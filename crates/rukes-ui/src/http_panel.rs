@@ -11,6 +11,7 @@ use rukes_core::i18n::{tr, trf};
 use rukes_core::{HTTP_METHODS, HttpForm, HttpResponse};
 
 use crate::app::Message;
+use crate::json_highlight;
 use crate::theme::Look;
 
 /// Pestañas, en orden.
@@ -629,6 +630,18 @@ pub fn view<'a>(p: &'a HttpPanel, l: &Look) -> Element<'a, Message> {
                 .align_y(iced::alignment::Vertical::Center),
         );
         if p.response.is_some() {
+            let mode = match &p.response {
+                Some(Ok(r)) => json_highlight::mode_for(&r.content_type, &r.body, p.show_headers),
+                _ => json_highlight::Mode::Plain,
+            };
+            let palette = json_highlight::Palette {
+                mode,
+                key: l.accent,
+                string: l.success,
+                number: l.warning,
+                literal: l.danger,
+                punct: muted,
+            };
             let body = editor(&p.view)
                 .id(response_id())
                 .on_action(Message::HttpView)
@@ -636,7 +649,11 @@ pub fn view<'a>(p: &'a HttpPanel, l: &Look) -> Element<'a, Message> {
                 .size(l.small())
                 .height(Length::Fill)
                 .padding([6.0, 14.0])
-                .style(editor_style(l));
+                .style(editor_style(l))
+                .highlight_with::<json_highlight::JsonHighlighter>(
+                    palette,
+                    json_highlight::to_format,
+                );
             col = col.push(container(body).height(Length::Fill));
         }
     }

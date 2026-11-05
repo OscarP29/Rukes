@@ -7,6 +7,7 @@
 mod app;
 mod hints;
 mod http_panel;
+mod json_highlight;
 mod panel;
 mod theme;
 

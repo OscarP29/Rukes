@@ -161,6 +161,14 @@ quit = "Salir de Rukes"
 quit_sub = "Cierra el launcher por completo"
 reload = "Recargar Rukes"
 reload_sub = "Vuelve a indexar las aplicaciones"
+folder_config = "Carpeta de configuración"
+folder_workflows = "Carpeta de workflows"
+folder_plugins = "Carpeta de plugins"
+folder_themes = "Carpeta de temas"
+folder_scripts = "Carpeta de scripts"
+folder_snippets = "Carpeta de snippets"
+folder_notes = "Carpeta de notas"
+folder_logs = "Carpeta de logs"
 
 [templates]
 js = "JavaScript (Node, Deno o Bun)"
@@ -699,11 +707,13 @@ ex2 = "logs | Historial de ejecuciones"
 tip1 = "Ctrl+E edita el script; Ctrl+D lo manda a la papelera"
 
 [usage.rukes]
-summary = "Comandos de Rukes: ajustes, configuración, recargar, salir, exportar e importar"
+summary = "Comandos de Rukes: ajustes, configuración, carpetas, recargar, salir, exportar e importar"
 ex1 = "ajustes | Panel visual de ajustes"
 ex2 = "configuración | Abre config.toml"
 ex3 = "exportar configuración | Copia de seguridad en Documentos"
 ex4 = "salir | Cierra Rukes"
+ex5 = "carpetas | Lista las carpetas de Rukes (workflows, plugins, temas, scripts…)"
+ex6 = "carpeta scripts | Abre la carpeta de scripts en el Explorador"
 
 [usage.http]
 summary = "Mini Postman: una barra para enviar peticiones HTTP y ver la respuesta"

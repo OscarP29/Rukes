@@ -161,6 +161,14 @@ quit = "Quit Rukes"
 quit_sub = "Close the launcher completely"
 reload = "Reload Rukes"
 reload_sub = "Re-index applications"
+folder_config = "Configuration folder"
+folder_workflows = "Workflows folder"
+folder_plugins = "Plugins folder"
+folder_themes = "Themes folder"
+folder_scripts = "Scripts folder"
+folder_snippets = "Snippets folder"
+folder_notes = "Notes folder"
+folder_logs = "Logs folder"
 
 [templates]
 js = "JavaScript (Node, Deno or Bun)"
@@ -699,11 +707,13 @@ ex2 = "logs | Run history"
 tip1 = "Ctrl+E edits the script; Ctrl+D sends it to the recycle bin"
 
 [usage.rukes]
-summary = "Rukes commands: settings, configuration, reload, quit, export and import"
+summary = "Rukes commands: settings, configuration, folders, reload, quit, export and import"
 ex1 = "settings | Visual settings panel"
 ex2 = "config | Opens config.toml"
 ex3 = "export config | Backup in Documents"
 ex4 = "quit | Closes Rukes"
+ex5 = "folders | Lists the Rukes folders (workflows, plugins, themes, scripts…)"
+ex6 = "folder scripts | Opens the scripts folder in Explorer"
 
 [usage.http]
 summary = "Mini Postman: a bar that sends HTTP requests and shows the response"

@@ -400,9 +400,23 @@ impl AppHost {
         }));
         let quit_host = Arc::downgrade(self);
         let reload_engine = Arc::clone(&self.engine);
+        let notes_dir = settings::notes_files(config, &self.paths)
+            .0
+            .parent()
+            .map_or_else(|| self.paths.notes_dir(), std::path::Path::to_path_buf);
         plugins.push(Arc::new(SystemPlugin {
             config_file: self.paths.config_file(),
             paths: self.paths.clone(),
+            folders: vec![
+                ("config", self.paths.config_dir.clone()),
+                ("workflows", settings::workflows_dir(config, &self.paths)),
+                ("plugins", settings::plugins_dir(config, &self.paths)),
+                ("themes", self.paths.themes_dir()),
+                ("scripts", settings::scripts_dir(config, &self.paths)),
+                ("snippets", settings::snippets_dir(config, &self.paths)),
+                ("notes", notes_dir),
+                ("logs", self.paths.logs_dir.clone()),
+            ],
             on_quit: Box::new(move || {
                 if let Some(h) = quit_host.upgrade() {
                     h.quit();
