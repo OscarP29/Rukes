@@ -4,6 +4,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 7: plugins externos y fondos de pantalla
+
+#### Añadido
+- Plugins externos (RF-170..RF-173): procesos aparte que hablan JSON por stdin/stdout
+  (`initialize`, `query`, `results`, `action`, `cancel`, `log`), descritos en
+  `docs/plugin-protocol.md`. Cada uno en `plugins\<nombre>\plugin.toml` (nombre, versión,
+  ejecutable, palabras clave, prefijo, permisos y `[config]`).
+- Aislamiento: el proceso arranca al primer uso y sin ventana; tiempos máximos de 2 s por
+  consulta y 10 s por acción; un plugin que se cuelga o muere se termina y se vuelve a arrancar;
+  con 3 fallos seguidos queda desactivado hasta recargarlo. Una consulta nueva abandona la
+  anterior al instante y avisa al plugin con `cancel`. stderr va al log.
+- Instalación y retirada en caliente (se vigila la carpeta); al instalar, una notificación
+  muestra los permisos declarados (informativos en v1.0).
+- `plugins`: lista de plugins externos con estado, permisos y errores del manifiesto; Enter
+  reinicia uno.
+- Ejemplos: `plugins-examples/cuenta` (Python) y `plugins-examples/color` (Rust).
+- `wall` (RF-180): fondos de pantalla de tus carpetas con miniaturas en la lista y vista previa;
+  Enter lo pone en todos los monitores; `wall random`; cambio automático cada cierto tiempo
+  (`interval`, al azar o en orden) y ajuste (`position`). Sección `[plugins.wall]`.
+- Miniaturas como icono de resultado (`Icon::Thumbnail`).
+- `[plugins.external]` en la configuración.
+
 ### Fase 6: workflows y automatización
 
 #### Añadido

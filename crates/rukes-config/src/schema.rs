@@ -235,6 +235,64 @@ pub struct Plugins {
     pub snippets: Snippets,
     /// Notas, tareas y recordatorios.
     pub notes: Notes,
+    /// Fondos de pantalla (RF-180).
+    pub wall: Wall,
+    /// Plugins externos (RF-170).
+    pub external: External,
+}
+
+/// `[plugins.wall]` (RF-180)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Wall {
+    /// Activo.
+    pub enabled: bool,
+    /// Palabra clave.
+    pub keyword: String,
+    /// Carpetas con imágenes (con subcarpetas). Admiten `~` y `%VAR%`.
+    pub dirs: Vec<String>,
+    /// Ajuste: `fill`, `fit`, `stretch`, `tile`, `center` o `span`.
+    pub position: String,
+    /// Cambiar de fondo cada cierto tiempo (`30m`, `2h`). Vacío = nunca.
+    pub interval: String,
+    /// Al rotar: `true` al azar, `false` en orden.
+    pub shuffle: bool,
+}
+
+impl Default for Wall {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            keyword: "wall".into(),
+            dirs: vec![
+                "~/Pictures/Wallpapers".into(),
+                "%SystemRoot%/Web/Wallpaper".into(),
+            ],
+            position: "fill".into(),
+            interval: String::new(),
+            shuffle: true,
+        }
+    }
+}
+
+/// `[plugins.external]` (RF-170..RF-173)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct External {
+    /// Cargar plugins externos.
+    pub enabled: bool,
+    /// Carpeta (una subcarpeta con `plugin.toml` por plugin). Vacío = `plugins` dentro de la
+    /// configuración.
+    pub dir: String,
+}
+
+impl Default for External {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            dir: String::new(),
+        }
+    }
 }
 
 /// `[plugins.clipboard]` (sección 5.10)

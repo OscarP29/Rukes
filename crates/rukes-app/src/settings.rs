@@ -105,6 +105,28 @@ pub fn snippets_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path
     path_or(&c.plugins.snippets.dir, paths.snippets_dir())
 }
 
+/// Carpeta de plugins externos (RF-170).
+pub fn plugins_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path::PathBuf {
+    path_or(&c.plugins.external.dir, paths.plugins_dir())
+}
+
+/// Fondos de pantalla (RF-180).
+pub fn wall(c: &Config) -> rukes_plugins::WallSettings {
+    let w = &c.plugins.wall;
+    rukes_plugins::WallSettings {
+        keyword: w.keyword.trim().to_lowercase(),
+        dirs: w
+            .dirs
+            .iter()
+            .filter(|d| !d.trim().is_empty())
+            .map(|d| rukes_script::args::expand_path(d.trim()))
+            .collect(),
+        position: rukes_platform::wallpaper::Position::parse(&w.position).unwrap_or_default(),
+        interval: rukes_plugins::workflows::parse_duration(&w.interval),
+        shuffle: w.shuffle,
+    }
+}
+
 /// Carpeta de workflows (sección 5.14).
 pub fn workflows_dir(c: &Config, paths: &rukes_config::paths::Paths) -> std::path::PathBuf {
     path_or(&c.workflows.dir, paths.workflows_dir())

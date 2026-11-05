@@ -1,0 +1,16 @@
+[package]
+name = "rukes-plugin-color"
+version = "1.0.0"
+edition = "2024"
+description = "Plugin externo de ejemplo para Rukes: conversor de colores."
+publish = false
+
+# Proyecto independiente: no forma parte del workspace de Rukes.
+[workspace]
+
+[dependencies]
+serde_json = "1.0"
+
+[profile.release]
+opt-level = "s"
+strip = true

@@ -26,6 +26,7 @@ pub mod sysinfo;
 pub mod text;
 pub mod time;
 pub mod tray;
+pub mod wallpaper;
 pub mod window;
 pub mod winlist;
 

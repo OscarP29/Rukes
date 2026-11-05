@@ -3,35 +3,36 @@
 Leyenda: ✅ verificado · ⏳ pendiente de verificar a mano · ⚠️ verificado con observaciones ·
 ➖ fuera de alcance
 
-Desde esta fase las pruebas en la app las hace el usuario con la lista de abajo; las
+Desde esta fase las pruebas en la app las hace el usuario con la lista de abajo (todas
+confirmadas el 2026-11-04); las
 automáticas (`cargo test`) cubren el formato, las posiciones, los triggers y el ejecutor.
 
 ## Criterios de aceptación
 
 | Criterio | Estado | Notas |
 | --- | --- | --- |
-| Caso de uso 5: `modo trabajo` abre VS Code, el navegador con la documentación y la terminal, cada uno en su posición, en dos monitores | ⏳ | Prueba 2 |
-| Los triggers programados se ejecutan | ⏳ | Prueba 6; tests: `next_due`, trigger `startup` |
-| Los triggers se pueden pausar | ⏳ | Prueba 7 |
+| Caso de uso 5: `modo trabajo` abre VS Code, el navegador con la documentación y la terminal, cada uno en su posición, en dos monitores | ✅ | Prueba 2 |
+| Los triggers programados se ejecutan | ✅ | Prueba 6; tests: `next_due`, trigger `startup` |
+| Los triggers se pueden pausar | ✅ | Prueba 7 |
 
 ## Workflows (5.14)
 
 | Caso | RF | Estado | Notas |
 | --- | --- | --- | --- |
-| Pasos en TOML: app, url, script, wait, theme, power_plan, kill, notify | RF-150 | ⏳ | Tests de formato y del ejecutor (con ganchos simulados) |
-| Posición por monitor, `snap`, coordenadas, tamaño y maximizado | RF-151 | ⏳ | Tests de `layout`; compensa el borde invisible de Windows 10/11 |
+| Pasos en TOML: app, url, script, wait, theme, power_plan, kill, notify | RF-150 | ✅ | Tests de formato y del ejecutor (con ganchos simulados) |
+| Posición por monitor, `snap`, coordenadas, tamaño y maximizado | RF-151 | ✅ | Tests de `layout`; compensa el borde invisible de Windows 10/11 |
 | Modos de ejemplo: Trabajo, Gaming, Presentación, Proyecto X | RF-152 | ✅ | `workflows/ejemplos.toml` (test) |
-| Resultado en el launcher con alias y atajo propio | RF-154 | ⏳ | Pruebas 1 y 5 |
-| Vista previa de los pasos e informe por paso | RF-155 | ⏳ | `Ctrl+P`; notificación al terminar y «Última ejecución» en la vista previa |
+| Resultado en el launcher con alias y atajo propio | RF-154 | ✅ | Pruebas 1 y 5 |
+| Vista previa de los pasos e informe por paso | RF-155 | ✅ | `Ctrl+P`; notificación al terminar y «Última ejecución» en la vista previa |
 | Pasos condicionales | RF-153 | ➖ | Prioridad C |
 
 ## Triggers (5.15)
 
 | Caso | RF | Estado | Notas |
 | --- | --- | --- | --- |
-| Hora (con días), intervalo e inicio de sesión | RF-160 | ⏳ | `at`, `every` (mínimo 1 min), `on = "login"`/`"startup"` |
-| Atajos globales por script (`@rukes.hotkey`) o workflow (`hotkey`) | RF-162 | ⏳ | Se liberan con «Pausar» de la bandeja |
-| Pausa global desde la bandeja | RF-163 | ⏳ | «Pausar triggers» / «Reanudar triggers» |
+| Hora (con días), intervalo e inicio de sesión | RF-160 | ✅ | `at`, `every` (mínimo 1 min), `on = "login"`/`"startup"` |
+| Atajos globales por script (`@rukes.hotkey`) o workflow (`hotkey`) | RF-162 | ✅ | Se liberan con «Pausar» de la bandeja |
+| Pausa global desde la bandeja | RF-163 | ✅ | «Pausar triggers» / «Reanudar triggers» |
 | Triggers por evento (USB, red, app) | RF-161 | ➖ | Prioridad C |
 
 ## Pruebas para el usuario

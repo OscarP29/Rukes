@@ -15,10 +15,10 @@ use rukes_platform::tray::{MenuEntry, Tray};
 use rukes_platform::{autostart, dwm, icons, window};
 use rukes_plugins::workflows::{Hooks as WorkflowHooks, Runner, Scheduler, Target};
 use rukes_plugins::{
-    AppsPlugin, CalcPlugin, ClipHistory, ClipboardPlugin, FileIndex, FilesPlugin, GeneratorsPlugin,
-    NotesPlugin, ProcessesPlugin, RemindPlugin, RemindStore, ShellPlugin, ShellSettings,
-    SnippetStore, SnippetsPlugin, SystemCommandsPlugin, TodoPlugin, WebPlugin, WindowsPlugin,
-    WorkflowStore, WorkflowsPlugin,
+    AppsPlugin, CalcPlugin, ClipHistory, ClipboardPlugin, ExternalPlugins, FileIndex, FilesPlugin,
+    GeneratorsPlugin, NotesPlugin, ProcessesPlugin, RemindPlugin, RemindStore, ShellPlugin,
+    ShellSettings, SnippetStore, SnippetsPlugin, SystemCommandsPlugin, TodoPlugin, WallPlugin,
+    WebPlugin, WindowsPlugin, WorkflowStore, WorkflowsPlugin,
 };
 use rukes_script::{Catalog, Hooks, RunContext, Runs, Scripts, ScriptsPlugin};
 use rukes_ui::{Host, IconRgba, Preview, Sink, UiConfig, UiEvent, UiSender, UiStyle};
@@ -106,7 +106,13 @@ pub struct AppHost {
     /// Atajos propios de scripts y workflows (RF-162) y lo que ejecuta cada uno.
     extra_hotkeys: Mutex<Option<HotkeySet>>,
     hotkey_targets: Arc<Mutex<Vec<Target>>>,
+    /// Plugins externos: carpeta, plugins cargados y vigilante (RF-170, RF-173).
+    external: Mutex<Option<ExternalSlot>>,
+    /// Fondos de pantalla (se conserva si no cambian sus ajustes, para no reiniciar la rotación).
+    wall: Mutex<Option<Arc<WallPlugin>>>,
 }
+
+type ExternalSlot = (std::path::PathBuf, Arc<ExternalPlugins>, Option<DirWatcher>);
 
 type WorkflowSlot = (
     std::path::PathBuf,
@@ -168,6 +174,8 @@ impl AppHost {
             workflows: Mutex::new(None),
             extra_hotkeys: Mutex::new(None),
             hotkey_targets: Arc::default(),
+            external: Mutex::new(None),
+            wall: Mutex::new(None),
         }
     }
 
@@ -332,6 +340,8 @@ impl AppHost {
         drop(files);
         self.text_plugins(config, &mut plugins);
         self.workflow_plugins(config, &mut plugins);
+        self.wall_plugin(config, &mut plugins);
+        self.external_plugins(config, &mut plugins);
         if config.scripts.enabled {
             plugins.push(Arc::new(self.scripts_plugin(config)));
         } else {
@@ -406,6 +416,119 @@ impl AppHost {
             runner,
             scheduler: Some(scheduler),
         }));
+    }
+
+    /// Fondos de pantalla (RF-180).
+    fn wall_plugin(&self, config: &Config, plugins: &mut Vec<Arc<dyn Plugin>>) {
+        let mut slot = self.wall.lock().unwrap_or_else(|p| p.into_inner());
+        if !config.plugins.wall.enabled {
+            *slot = None;
+            return;
+        }
+        let wanted = settings::wall(config);
+        let wall = match slot.as_ref() {
+            Some(w) if *w.settings() == wanted => Arc::clone(w),
+            _ => Arc::new(WallPlugin::new(wanted)),
+        };
+        *slot = Some(Arc::clone(&wall));
+        plugins.push(wall);
+    }
+
+    /// Plugins externos (RF-170..RF-173). Se conservan (con sus procesos) entre recargas de la
+    /// configuración; la carpeta se vigila para instalar y quitar en caliente.
+    fn external_plugins(self: &Arc<Self>, config: &Config, plugins: &mut Vec<Arc<dyn Plugin>>) {
+        let mut slot = self.external.lock().unwrap_or_else(|p| p.into_inner());
+        if !config.plugins.external.enabled {
+            *slot = None;
+            return;
+        }
+        let dir = settings::plugins_dir(config, &self.paths);
+        let set = match slot.as_ref() {
+            Some((d, set, _)) if *d == dir => Arc::clone(set),
+            _ => {
+                if let Err(e) = std::fs::create_dir_all(&dir) {
+                    tracing::warn!(%e, dir = %dir.display(), "no se pudo crear la carpeta de plugins");
+                }
+                let set = Arc::new(ExternalPlugins::load(&dir));
+                self.external_errors(&set.errors);
+                tracing::info!(n = set.plugins.len(), dir = %dir.display(), "plugins externos");
+                let me = Arc::downgrade(self);
+                let watcher =
+                    DirWatcher::spawn_tree(&dir, rukes_plugins::external::MANIFEST, move || {
+                        if let Some(h) = me.upgrade() {
+                            h.reload_external();
+                        }
+                    })
+                    .map_err(|e| tracing::warn!(%e, "no se pudo vigilar la carpeta de plugins"))
+                    .ok();
+                *slot = Some((dir, Arc::clone(&set), watcher));
+                set
+            }
+        };
+        plugins.extend(set.engine_plugins());
+    }
+
+    /// Vuelve a leer la carpeta de plugins: avisa de los instalados (con sus permisos) y de los
+    /// quitados, y recarga el motor. Los plugins desactivados por fallos vuelven a probarse.
+    fn reload_external(self: &Arc<Self>) {
+        let config = self.inner().config.clone();
+        {
+            let mut slot = self.external.lock().unwrap_or_else(|p| p.into_inner());
+            let Some((dir, old, _)) = slot.as_mut() else {
+                return;
+            };
+            let new = Arc::new(ExternalPlugins::load(dir));
+            let ids = |s: &ExternalPlugins| -> std::collections::BTreeSet<String> {
+                s.plugins.iter().map(|p| p.manifest.id.clone()).collect()
+            };
+            let (before, after) = (ids(old), ids(&new));
+            for p in new
+                .plugins
+                .iter()
+                .filter(|p| !before.contains(&p.manifest.id))
+            {
+                let m = &p.manifest;
+                let perms = m.permissions_label();
+                let perms = if perms.is_empty() {
+                    tr("external.no_permissions").to_owned()
+                } else {
+                    perms
+                };
+                tracing::info!(plugin = %m.name, version = %m.version, permissions = %perms, "plugin externo instalado");
+                self.system_notify(
+                    &trf(
+                        "external.installed",
+                        &[("name", &m.name), ("version", &m.version)],
+                    ),
+                    &trf("external.installed_perms", &[("perms", &perms)]),
+                    false,
+                );
+            }
+            for p in old
+                .plugins
+                .iter()
+                .filter(|p| !after.contains(&p.manifest.id))
+            {
+                tracing::info!(plugin = %p.manifest.name, "plugin externo quitado");
+                self.system_notify(
+                    &trf("external.removed", &[("name", &p.manifest.name)]),
+                    "",
+                    false,
+                );
+            }
+            self.external_errors(&new.errors);
+            *old = new;
+        }
+        self.install_plugins(&config);
+    }
+
+    fn external_errors(&self, errors: &[String]) {
+        for e in errors {
+            tracing::warn!(error = %e, "plugin externo no válido");
+        }
+        if let Some(e) = errors.first() {
+            self.notice(format!("{}: {e}", tr("external.bad_manifest")));
+        }
     }
 
     fn workflow_hooks(self: &Arc<Self>) -> WorkflowHooks {
@@ -1196,16 +1319,22 @@ impl Host for AppHost {
     }
 
     fn icon(&self, icon: &Icon, px: u32) -> Option<IconRgba> {
-        let source = match icon {
-            Icon::Shell(s) => s.clone(),
-            Icon::File(p) => p.to_string_lossy().into_owned(),
+        let (source, thumb) = match icon {
+            Icon::Shell(s) => (s.clone(), false),
+            Icon::File(p) => (p.to_string_lossy().into_owned(), false),
+            Icon::Thumbnail(p) => (p.to_string_lossy().into_owned(), true),
             Icon::None | Icon::Named(_) => return None,
         };
-        let key = IconCache::key(&source, px);
+        // Las miniaturas se guardan aparte de los iconos del mismo archivo.
+        let key = IconCache::key(&source, px) ^ if thumb { 0x7468_756d_6200 } else { 0 };
         if let Some(i) = self.icon_cache.get(key) {
             return Some(i);
         }
-        let i = icons::load(&source, px).map(|i| (i.width, i.height, i.pixels))?;
+        let i = thumb
+            .then(|| icons::thumbnail(&source, px))
+            .flatten()
+            .or_else(|| icons::load(&source, px))
+            .map(|i| (i.width, i.height, i.pixels))?;
         self.icon_cache.put(key, &i);
         Some(i)
     }

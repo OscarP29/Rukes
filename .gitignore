@@ -2,3 +2,4 @@
 /spikes/target
 /data
 *.pdb
+/plugins-examples/*/target

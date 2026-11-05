@@ -165,6 +165,26 @@ enabled = true
 notes_file = ""
 todo_file = ""
 
+[plugins.wall]
+# "wall": tus fondos de pantalla con previsualización; Enter lo pone, "wall random" elige uno.
+enabled = true
+keyword = "wall"
+# Carpetas con imágenes (se miran también las subcarpetas). Admiten ~ y %VAR%.
+dirs = ["~/Pictures/Wallpapers", "%SystemRoot%/Web/Wallpaper"]
+# fill, fit, stretch, tile, center o span (una imagen para todos los monitores).
+position = "fill"
+# Cambiar solo cada cierto tiempo, p. ej. "30m" o "2h". Vacío = nunca.
+interval = ""
+# Al cambiar solo: true = al azar, false = en orden.
+shuffle = true
+
+[plugins.external]
+# Plugins externos: una subcarpeta con plugin.toml por plugin (protocolo en
+# docs/plugin-protocol.md). Se instalan y quitan en caliente. "plugins" los lista.
+enabled = true
+# Vacío = carpeta "plugins" dentro de la configuración.
+dir = ""
+
 [scripts]
 # Scripts propios: cualquier archivo de la carpeta con una cabecera "@rukes.name" aparece en el
 # launcher sin reiniciar. "new script" crea uno desde una plantilla y "logs" muestra el historial.

@@ -69,19 +69,53 @@ impl DirWatcher {
         exts: &'static [&'static str],
         on_change: impl Fn() + Send + 'static,
     ) -> notify::Result<Self> {
+        Self::spawn_filtered(
+            dir,
+            RecursiveMode::NonRecursive,
+            move |p| {
+                p.extension()
+                    .is_some_and(|e| exts.iter().any(|x| e.eq_ignore_ascii_case(x)))
+            },
+            on_change,
+        )
+    }
+
+    /// Vigila una carpeta de plugins (con subcarpetas): avisa al crear o quitar una subcarpeta y
+    /// al cambiar un archivo llamado `file_name` dentro de ellas (RF-173).
+    pub fn spawn_tree(
+        dir: &Path,
+        file_name: &'static str,
+        on_change: impl Fn() + Send + 'static,
+    ) -> notify::Result<Self> {
+        let root = dir.to_path_buf();
+        Self::spawn_filtered(
+            dir,
+            RecursiveMode::Recursive,
+            move |p| {
+                p.parent() == Some(root.as_path())
+                    || p.file_name()
+                        .is_some_and(|n| n.eq_ignore_ascii_case(file_name))
+            },
+            on_change,
+        )
+    }
+
+    fn spawn_filtered(
+        dir: &Path,
+        mode: RecursiveMode,
+        filter: impl Fn(&Path) -> bool + Send + 'static,
+        on_change: impl Fn() + Send + 'static,
+    ) -> notify::Result<Self> {
         let _ = std::fs::create_dir_all(dir);
         let (tx, rx) = crossbeam_channel::unbounded::<()>();
         let mut watcher = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
             if let Ok(ev) = ev
-                && ev.paths.iter().any(|p| {
-                    p.extension()
-                        .is_some_and(|e| exts.iter().any(|x| e.eq_ignore_ascii_case(x)))
-                })
+                && ev.paths.iter().any(|p| filter(p))
             {
                 let _ = tx.send(());
             }
         })?;
-        watcher.watch(dir, RecursiveMode::NonRecursive)?;
+        watcher.watch(dir, mode)?;
         std::thread::Builder::new()
             .name("rukes-dir-watch".into())
             .spawn(move || {

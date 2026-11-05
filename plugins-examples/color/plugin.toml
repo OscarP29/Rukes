@@ -1,0 +1,14 @@
+# Plugin de ejemplo en Rust: conversor de colores (hex, rgb, hsl).
+# Instalación: `cargo build --release` en esta carpeta, y copia plugin.toml y
+# target\release\rukes-plugin-color.exe a %APPDATA%\Rukes\plugins\color.
+
+[plugin]
+name = "Color"
+version = "1.0.0"
+description = "Convierte colores entre hex, rgb y hsl: «color #ff8800», «color 255 136 0», «color hsl 32 100 50»."
+author = "Rukes"
+executable = "rukes-plugin-color.exe"
+keywords = ["color", "colour"]
+
+[permissions]
+clipboard = true

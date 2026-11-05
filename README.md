@@ -37,6 +37,8 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `note idea`, `todo comprar pan`, `todo` | Notas y tareas en Markdown (Enter completa una tarea) |
 | `remind 15m llamar a Ana`, `recordar 14:30 reunión` | Recordatorios con notificación |
 | `modo trabajo`, `workflows`, `triggers` | Workflows (apps y webs colocadas en tus monitores) y triggers programados |
+| `wall`, `wall random` | Fondos de pantalla con miniaturas y previsualización; cambio automático opcional |
+| `plugins` | Plugins externos instalados, su estado y permisos |
 
 | Tecla | Acción |
 | --- | --- |
@@ -66,6 +68,10 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
   `[plugins.clipboard] exclude`; `enabled = false` deja de escuchar el portapapeles.
 - **Snippets, notas y tareas:** carpeta `snippets` y archivos `notes/notas.md` y
   `notes/tareas.md` junto a `config.toml` (configurables; sirven en Obsidian).
+- **Plugins externos:** cualquier programa que hable JSON por stdin/stdout, en una carpeta con
+  `plugin.toml` dentro de `plugins` junto a `config.toml`. Se instalan y quitan en caliente.
+  Protocolo en [`docs/plugin-protocol.md`](docs/plugin-protocol.md); ejemplos en Python y Rust en
+  [`plugins-examples`](plugins-examples).
 - **Workflows y triggers:** archivos `.toml` de la carpeta `workflows` junto a `config.toml`
   (la primera vez se crean ejemplos comentados). Los triggers se pausan desde la bandeja.
 - **Salir:** escribe «salir» en el launcher o usa el menú del icono de la bandeja.

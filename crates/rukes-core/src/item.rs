@@ -68,6 +68,8 @@ pub enum Icon {
     Shell(String),
     /// Icono interno con nombre (glifo del tema).
     Named(String),
+    /// Miniatura del contenido del archivo (imágenes); si no hay, su icono.
+    Thumbnail(PathBuf),
 }
 
 /// Un resultado de búsqueda.

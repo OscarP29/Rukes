@@ -1,0 +1,22 @@
+# Plugin de ejemplo en Python: cuenta palabras, caracteres y líneas del texto escrito.
+# Instalación: copia esta carpeta a %APPDATA%\Rukes\plugins\cuenta (necesita `python` en el PATH).
+
+[plugin]
+name = "Cuenta"
+version = "1.0.0"
+description = "Cuenta palabras, caracteres y tiempo de lectura. Prueba también «cuenta cuelga» y «cuenta muere»."
+author = "Rukes"
+executable = "python"
+args = ["-u", "main.py"]
+keywords = ["cuenta", "count"]
+icon = "calc"
+
+# Informativos en v1.0: se muestran al instalar y en `plugins`.
+[permissions]
+clipboard = true
+network = false
+filesystem = false
+
+# Llega al plugin en `initialize` (params.config).
+[config]
+palabras_por_minuto = 200

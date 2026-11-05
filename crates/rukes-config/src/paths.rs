@@ -89,6 +89,11 @@ impl Paths {
         self.config_dir.join("workflows")
     }
 
+    /// Plugins externos por defecto (RF-170).
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.config_dir.join("plugins")
+    }
+
     /// Notas y tareas por defecto.
     pub fn notes_dir(&self) -> PathBuf {
         self.config_dir.join("notes")
