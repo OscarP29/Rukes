@@ -23,9 +23,46 @@ use crate::host::AppHost;
 /// Cada cuánto se guarda la frecency si cambió.
 const SAVE_EVERY: Duration = Duration::from_secs(30);
 
+/// Órdenes de línea de comandos (sin ventana; el resultado va al log y al código de salida):
+/// `--schema <archivo>`, `--export <carpeta>`, `--import <carpeta>`.
+fn cli(paths: &Paths) -> Option<i32> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (cmd, arg) = (
+        args.first()?.as_str(),
+        args.get(1).map(std::path::PathBuf::from),
+    );
+    let r: Result<String, String> = match (cmd, arg) {
+        ("--schema", Some(f)) => std::fs::write(&f, rukes_config::transfer::json_schema())
+            .map(|()| f.display().to_string())
+            .map_err(|e| e.to_string()),
+        ("--export", Some(d)) => rukes_config::transfer::export(paths, &d, &system_plugin::stamp())
+            .map(|p| p.display().to_string())
+            .map_err(|e| e.to_string()),
+        ("--import", Some(d)) => rukes_config::transfer::import(paths, &d, &system_plugin::stamp())
+            .map(|p| format!("copia de seguridad en {}", p.display())),
+        _ => return None,
+    };
+    match r {
+        Ok(msg) => {
+            tracing::info!(cmd, %msg, "orden de línea de comandos");
+            Some(0)
+        }
+        Err(e) => {
+            tracing::error!(cmd, error = %e, "orden de línea de comandos");
+            Some(1)
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let paths = Paths::detect();
     let _log = logging::init(&paths.logs_dir)?;
+    if let Some(code) = cli(&paths) {
+        std::process::exit(code);
+    }
+    if let Err(e) = rukes_config::transfer::write_schema(&paths) {
+        tracing::warn!(%e, "no se pudo escribir config.schema.json");
+    }
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         portable = paths.portable,

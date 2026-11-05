@@ -1,3 +1,4 @@
+#:schema ./config.schema.json
 # Configuración de Rukes.
 # Los cambios se aplican al guardar. Si hay un error, Rukes lo indica y sigue con la última
 # configuración válida. Cualquier clave que borres vuelve a su valor por defecto.
@@ -47,6 +48,19 @@ enabled = true
 priority = 0.0
 include_path = true
 
+# Perfiles: una app con argumentos o carpeta propios (RF-033). Descomenta para probar.
+# [[plugins.apps.profiles]]
+# name = "Chrome (trabajo)"
+# target = "Google Chrome"          # nombre en el menú Inicio, ruta de un .exe o comando
+# args = '--profile-directory="Profile 1"'
+# alias = ["cw"]
+#
+# [[plugins.apps.profiles]]
+# name = "Terminal en Proyectos"
+# target = "wt.exe"
+# args = "-d ."
+# cwd = "~/Desktop/Proyectos"
+
 [plugins.apps.aliases]
 # alias = "Nombre de la app tal y como aparece en el menú Inicio"
 # c = "Google Chrome"
@@ -59,6 +73,13 @@ enabled = true
 prefix = "="
 # Evaluar sin prefijo cuando la consulta parece una operación ("2+2", "20% de 340").
 auto = true
+# Divisas: "100 usd a eur", "50 dólares en pesos colombianos".
+currency = true
+# Pedir las tasas a open.er-api.com (como mucho dos veces al día). Es la única conexión a
+# internet de Rukes y está desactivada por defecto; con false se usa solo la caché.
+currency_online = false
+# Colores: "#ff5733", "rgb(255, 87, 51)", "hsl(11, 100%, 60%)" con muestra.
+colors = true
 
 [plugins.web]
 # URLs escritas directamente y búsquedas con palabra clave: "g rust lifetimes", "yt lofi".
@@ -121,6 +142,8 @@ exclude = [
 include_hidden = false
 # Caracteres mínimos para buscar archivos sin prefijo.
 min_chars = 3
+# Si Everything (voidtools) está abierto, buscar con él en todo el disco.
+everything = true
 
 [plugins.clipboard]
 # Historial del portapapeles ("clip"): se guarda cifrado con DPAPI en
@@ -164,6 +187,10 @@ paste = true
 enabled = true
 notes_file = ""
 todo_file = ""
+
+[plugins.controls]
+# "vol 50", "vol mute", "brillo 70", "wifi", "bluetooth", "avion", "oscuro", "claro".
+enabled = true
 
 [plugins.wall]
 # "wall": tus fondos de pantalla con previsualización; Enter lo pone, "wall random" elige uno.

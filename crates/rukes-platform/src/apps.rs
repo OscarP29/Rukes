@@ -69,7 +69,8 @@ impl AppKind {
     }
 }
 
-fn start_menu_dirs() -> Vec<PathBuf> {
+/// Carpetas del menú Inicio (común y del usuario).
+pub fn start_menu_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     for var in ["ProgramData", "APPDATA"] {
         if let Some(base) = std::env::var_os(var) {

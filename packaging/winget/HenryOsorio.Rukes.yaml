@@ -1,0 +1,7 @@
+# Plantilla: scripts/package.ps1 rellena {{VERSION}}, {{URL}} y {{SHA256}} en dist/winget/<versión>.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+PackageIdentifier: HenryOsorio.Rukes
+PackageVersion: {{VERSION}}
+DefaultLocale: es-ES
+ManifestType: version
+ManifestVersion: 1.6.0

@@ -148,3 +148,11 @@ Binario `rukes.exe` release: **12,6 MB** (12,2 MB en la fase 3).
 - En reposo no se piden fotogramas: la suscripción a `window::frames()` solo existe mientras
   hay una animación.
 - Medido con una copia portable (`portable.txt`) para no tocar la configuración del usuario.
+
+## Fase 8: release 1.0 (2026-11-04)
+
+Binario `rukes.exe` release: **14,5 MB** (15 188 992 bytes; 12,4 MB en la fase 5). Lo que más
+suma: el CRT enlazado estáticamente (RNF-031), las API de Windows nuevas (audio, WMI, radios,
+Everything), el esquema de la configuración (schemars) y el icono de 16 a 256 px. Queda a
+0,5 MB del límite de 15 MB (RNF-008); CI falla si se supera. Margen posible si hiciera falta:
+`opt-level = "z"` en crates fríos o quitar los tamaños grandes del icono.

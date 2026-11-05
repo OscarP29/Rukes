@@ -15,10 +15,11 @@ use rukes_platform::tray::{MenuEntry, Tray};
 use rukes_platform::{autostart, dwm, icons, window};
 use rukes_plugins::workflows::{Hooks as WorkflowHooks, Runner, Scheduler, Target};
 use rukes_plugins::{
-    AppsPlugin, CalcPlugin, ClipHistory, ClipboardPlugin, ExternalPlugins, FileIndex, FilesPlugin,
-    GeneratorsPlugin, NotesPlugin, ProcessesPlugin, RemindPlugin, RemindStore, ShellPlugin,
-    ShellSettings, SnippetStore, SnippetsPlugin, SystemCommandsPlugin, TodoPlugin, WallPlugin,
-    WebPlugin, WindowsPlugin, WorkflowStore, WorkflowsPlugin,
+    AppsPlugin, CalcPlugin, ClipHistory, ClipboardPlugin, ColorPlugin, ControlsPlugin,
+    CurrencyPlugin, ExternalPlugins, FileIndex, FilesPlugin, GeneratorsPlugin, NotesPlugin,
+    ProcessesPlugin, RemindPlugin, RemindStore, ShellPlugin, ShellSettings, SnippetStore,
+    SnippetsPlugin, SystemCommandsPlugin, TodoPlugin, WallPlugin, WebPlugin, WindowsPlugin,
+    WorkflowStore, WorkflowsPlugin,
 };
 use rukes_script::{Catalog, Hooks, RunContext, Runs, Scripts, ScriptsPlugin};
 use rukes_ui::{Host, IconRgba, Preview, Sink, UiConfig, UiEvent, UiSender, UiStyle};
@@ -110,6 +111,9 @@ pub struct AppHost {
     external: Mutex<Option<ExternalSlot>>,
     /// Fondos de pantalla (se conserva si no cambian sus ajustes, para no reiniciar la rotación).
     wall: Mutex<Option<Arc<WallPlugin>>>,
+    /// Plugin de apps vigente y vigilantes del menú Inicio (RF-034).
+    apps: Arc<Mutex<Weak<AppsPlugin>>>,
+    apps_watch: Mutex<Vec<DirWatcher>>,
 }
 
 type ExternalSlot = (std::path::PathBuf, Arc<ExternalPlugins>, Option<DirWatcher>);
@@ -176,6 +180,8 @@ impl AppHost {
             hotkey_targets: Arc::default(),
             external: Mutex::new(None),
             wall: Mutex::new(None),
+            apps: Arc::default(),
+            apps_watch: Mutex::new(Vec::new()),
         }
     }
 
@@ -271,16 +277,30 @@ impl AppHost {
         *self.me.lock().unwrap_or_else(|p| p.into_inner()) = Arc::downgrade(self);
         let mut plugins: Vec<Arc<dyn Plugin>> = Vec::new();
         if config.plugins.apps.enabled {
-            plugins.push(Arc::new(AppsPlugin::new(
+            let apps = Arc::new(AppsPlugin::new(
                 settings::apps(config),
                 rukes_plugins::apps::cache_file(&self.paths.cache_dir),
-            )));
+            ));
+            *self.apps.lock().unwrap_or_else(|p| p.into_inner()) = Arc::downgrade(&apps);
+            self.watch_start_menu();
+            plugins.push(apps);
+        } else {
+            *self.apps.lock().unwrap_or_else(|p| p.into_inner()) = Weak::new();
         }
         if config.plugins.calc.enabled {
             plugins.push(Arc::new(CalcPlugin {
                 prefix: config.plugins.calc.prefix.clone(),
                 auto: config.plugins.calc.auto,
             }));
+            if config.plugins.calc.colors {
+                plugins.push(Arc::new(ColorPlugin));
+            }
+            if config.plugins.calc.currency {
+                plugins.push(Arc::new(CurrencyPlugin::new(
+                    self.paths.cache_dir.join("currency.json"),
+                    config.plugins.calc.currency_online,
+                )));
+            }
         }
         if config.plugins.web.enabled {
             plugins.push(Arc::new(WebPlugin {
@@ -313,6 +333,9 @@ impl AppHost {
             plugins.push(Arc::new(WindowsPlugin {
                 priority: config.plugins.windows.priority,
             }));
+        }
+        if config.plugins.controls.enabled {
+            plugins.push(Arc::new(ControlsPlugin));
         }
         if config.plugins.processes.enabled {
             plugins.push(Arc::new(ProcessesPlugin::new(
@@ -355,6 +378,7 @@ impl AppHost {
         let reload_engine = Arc::clone(&self.engine);
         plugins.push(Arc::new(SystemPlugin {
             config_file: self.paths.config_file(),
+            paths: self.paths.clone(),
             on_quit: Box::new(move || {
                 if let Some(h) = quit_host.upgrade() {
                     h.quit();
@@ -416,6 +440,48 @@ impl AppHost {
             runner,
             scheduler: Some(scheduler),
         }));
+    }
+
+    /// Reindexa las apps cuando cambian los accesos directos del menú Inicio (RF-034). Los
+    /// instaladores crean varios archivos seguidos: se espera a que se calmen.
+    fn watch_start_menu(&self) {
+        let mut watchers = self.apps_watch.lock().unwrap_or_else(|p| p.into_inner());
+        if !watchers.is_empty() {
+            return;
+        }
+        let busy = Arc::new(AtomicBool::new(false));
+        for dir in rukes_platform::apps::start_menu_dirs() {
+            if !dir.is_dir() {
+                continue;
+            }
+            let (apps, busy) = (Arc::clone(&self.apps), Arc::clone(&busy));
+            let w = DirWatcher::spawn_recursive_ext(&dir, &["lnk"], move || {
+                if busy.swap(true, Ordering::SeqCst) {
+                    return;
+                }
+                let (apps, flag) = (Arc::clone(&apps), Arc::clone(&busy));
+                let spawned = std::thread::Builder::new()
+                    .name("rukes-apps-reindex".into())
+                    .spawn(move || {
+                        std::thread::sleep(Duration::from_secs(3));
+                        let p = apps.lock().unwrap_or_else(|p| p.into_inner()).upgrade();
+                        if let Some(p) = p {
+                            tracing::info!("menú Inicio cambiado: reindexando apps");
+                            p.refresh();
+                        }
+                        flag.store(false, Ordering::SeqCst);
+                    });
+                if spawned.is_err() {
+                    busy.store(false, Ordering::SeqCst);
+                }
+            });
+            match w {
+                Ok(w) => watchers.push(w),
+                Err(e) => {
+                    tracing::warn!(%e, dir = %dir.display(), "no se pudo vigilar el menú Inicio")
+                }
+            }
+        }
     }
 
     /// Fondos de pantalla (RF-180).

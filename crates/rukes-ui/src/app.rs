@@ -604,8 +604,35 @@ fn update(s: &mut State, msg: Message) -> Task<Message> {
     }
 }
 
+/// `#rrggbb` → color.
+fn swatch_color(hex: &str) -> Option<Color> {
+    let h = hex.strip_prefix('#')?;
+    if h.len() != 6 {
+        return None;
+    }
+    let v = u32::from_str_radix(h, 16).ok()?;
+    Some(Color::from_rgb8((v >> 16) as u8, (v >> 8) as u8, v as u8))
+}
+
 /// Icono de texto para los plugins integrados (`Icon::Named`).
 fn glyph<'a>(l: &Look, name: &str) -> Element<'a, Message> {
+    if let Some(c) = name.strip_prefix("swatch:").and_then(swatch_color) {
+        // Muestra de color (RF-075).
+        let (border, radius) = (l.muted, (l.radius - 2.0).max(0.0));
+        return container(space())
+            .width(l.icon)
+            .height(l.icon)
+            .style(move |_| container::Style {
+                background: Some(Background::Color(c)),
+                border: Border {
+                    radius: radius.into(),
+                    width: 1.0,
+                    color: border,
+                },
+                ..container::Style::default()
+            })
+            .into();
+    }
     let symbol = match name {
         "calc" => "=",
         "web" => "@",

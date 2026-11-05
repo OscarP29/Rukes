@@ -5,6 +5,7 @@ mod hotkey;
 pub mod paths;
 mod schema;
 pub mod theme;
+pub mod transfer;
 mod watch;
 
 use std::path::{Path, PathBuf};

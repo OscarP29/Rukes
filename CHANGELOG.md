@@ -4,6 +4,35 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Fase 8: release 1.0
+
+#### Añadido
+- Perfiles de apps `[[plugins.apps.profiles]]`: nombre, destino (app indexada o ruta),
+  argumentos, carpeta de trabajo, alias y administrador.
+- Reindexado automático de apps al cambiar los accesos directos del menú Inicio (RF-020).
+- Divisas en la calculadora (`100 usd a eur`): tasas de open.er-api.com, descargadas como
+  mucho cada 12 h en segundo plano y guardadas en caché para usarlas sin conexión
+  (`currency`; la descarga, `currency_online`, está desactivada por defecto).
+- Colores: `#rgb`, `#rrggbb`, `rgb()` y `hsl()` muestran una muestra y los formatos HEX, RGB,
+  HSL y HSV; Enter copia (`colors`).
+- Controles del sistema: volumen y silencio, brillo (WMI), Wi-Fi, Bluetooth, modo avión y tema
+  claro/oscuro de Windows (`[plugins.controls]`).
+- Integración con Everything por IPC cuando está abierto (`[plugins.files] everything`), con
+  vuelta al índice propio.
+- `config.schema.json` generado junto a `config.toml` para autocompletado y validación
+  (`rukes.exe --schema <archivo>`).
+- Exportar e importar la configuración (RF-202), desde el launcher o con `--export` /
+  `--import`; la importación valida `config.toml` y guarda una copia de la anterior.
+- Empaquetado (RNF-032): icono y VERSIONINFO en el exe, CRT estático, ZIP portable (RF-204),
+  instalador por usuario con Inno Setup, manifiestos de winget, SHA256SUMS y firma opcional
+  (`scripts/package.ps1`, `scripts/sign.ps1`, `.github/workflows/release.yml`).
+- Guía de usuario (`docs/usuario.md`) y guía de publicación (`docs/release.md`).
+- Licencias MIT y Apache-2.0.
+
+#### Cambiado
+- Versión 1.0.0.
+- CI: formato, clippy, tests, build release y control de tamaño del binario (≤ 15 MB).
+
 ### Fase 7: plugins externos y fondos de pantalla
 
 #### Añadido

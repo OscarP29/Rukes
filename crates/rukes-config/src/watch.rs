@@ -100,6 +100,24 @@ impl DirWatcher {
         )
     }
 
+    /// Vigila una carpeta con subcarpetas y avisa de los archivos con estas extensiones (accesos
+    /// directos del menú Inicio, RF-034).
+    pub fn spawn_recursive_ext(
+        dir: &Path,
+        exts: &'static [&'static str],
+        on_change: impl Fn() + Send + 'static,
+    ) -> notify::Result<Self> {
+        Self::spawn_filtered(
+            dir,
+            RecursiveMode::Recursive,
+            move |p| {
+                p.extension()
+                    .is_some_and(|e| exts.iter().any(|x| e.eq_ignore_ascii_case(x)))
+            },
+            on_change,
+        )
+    }
+
     fn spawn_filtered(
         dir: &Path,
         mode: RecursiveMode,

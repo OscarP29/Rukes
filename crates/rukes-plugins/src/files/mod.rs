@@ -48,6 +48,8 @@ pub struct FilesSettings {
     pub shell: String,
     /// Terminal (`wt` o vacío).
     pub terminal: String,
+    /// Buscar con Everything si está abierto (RF-041).
+    pub everything: bool,
 }
 
 impl FilesSettings {
@@ -337,6 +339,21 @@ pub fn terminal_here(shell_name: &str, terminal: &str, dir: &Path) -> Result<(),
         .map_err(|e| PluginError::Failed(e.to_string()))
 }
 
+/// Consulta para Everything: el texto, más `file:`/`folder:` y `ext:` según el filtro.
+pub fn everything_query(text: &str, kind: Kind, ext: Option<&str>) -> String {
+    let mut q = String::new();
+    match kind {
+        Kind::Files => q.push_str("file: "),
+        Kind::Dirs => q.push_str("folder: "),
+        Kind::Any => {}
+    }
+    if let Some(e) = ext {
+        q.push_str(&format!("ext:{} ", e.trim_start_matches('.')));
+    }
+    q.push_str(text.trim());
+    q.trim().to_owned()
+}
+
 /// Plugin de archivos. Hay una instancia global y otras dos con prefijo (`f:` y `d:`).
 pub struct FilesPlugin {
     index: Arc<FileIndex>,
@@ -364,6 +381,37 @@ impl FilesPlugin {
                 prefix: Some("d:".into()),
             },
         ]
+    }
+
+    /// Búsqueda con Everything (todo el disco). `None` si falla: se usa el índice propio.
+    fn search_everything(&self, text: &str, ext: Option<&str>) -> Option<Vec<ResultItem>> {
+        let q = everything_query(text, self.kind, ext);
+        let found = match rukes_platform::everything::search(&q, 100) {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::debug!(error = %e, "Everything no disponible; se usa el índice");
+                return None;
+            }
+        };
+        let mut f = rukes_core::Fuzzy::new(text);
+        let mut items: Vec<ResultItem> = found
+            .into_iter()
+            .map(|(p, dir)| {
+                let name = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let s = if text.is_empty() {
+                    0.5
+                } else {
+                    f.score(&name).unwrap_or(0.3)
+                };
+                Self::item(p, dir, s)
+            })
+            .collect();
+        items.sort_by(|a, b| b.fuzzy.total_cmp(&a.fuzzy));
+        items.truncate(50);
+        Some(items)
     }
 
     fn item(path: PathBuf, dir: bool, score: f32) -> ResultItem {
@@ -419,6 +467,15 @@ impl Plugin for FilesPlugin {
             sink(Vec::new());
             return;
         }
+        if self.index.settings.everything
+            && rukes_platform::everything::available()
+            && let Some(items) = self.search_everything(&text, ext.as_deref())
+        {
+            if !cancel.is_cancelled() {
+                sink(items);
+            }
+            return;
+        }
         let items = self
             .index
             .search(&text, self.kind, ext.as_deref(), cancel)
@@ -466,6 +523,16 @@ impl Plugin for FilesPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn everything_queries() {
+        assert_eq!(everything_query("informe", Kind::Any, None), "informe");
+        assert_eq!(
+            everything_query("informe", Kind::Files, Some(".pdf")),
+            "file: ext:pdf informe"
+        );
+        assert_eq!(everything_query("", Kind::Dirs, None), "folder:");
+    }
 
     #[test]
     fn splits_extension_filter() {

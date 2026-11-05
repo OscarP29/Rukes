@@ -2,7 +2,26 @@
 
 Launcher de productividad y automatización para Windows 10/11, escrito en Rust: ligero, rápido y con la automatización como ciudadano de primera clase.
 
-> Estado: **Fase 2**: apps, archivos, calculadora, web, shell, ventanas, procesos y generadores con `Alt+Space`. La especificación completa está en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
+> **Versión 1.0.** Guía de usuario completa en [`docs/usuario.md`](docs/usuario.md); la
+> especificación en [`Rukes Contexto y Requerimientos.md`](Rukes%20Contexto%20y%20Requerimientos.md).
+
+## Capturas
+
+| Búsqueda | Calculadora y colores | Portapapeles |
+| --- | --- | --- |
+| ![Búsqueda de apps](docs/img/busqueda.png) | ![Calculadora](docs/img/calculadora.png) | ![Portapapeles](docs/img/portapapeles.png) |
+
+| Controles del sistema | Fondos de pantalla | Temas |
+| --- | --- | --- |
+| ![Controles](docs/img/controles.png) | ![Fondos](docs/img/wall.png) | ![Temas](docs/img/temas.png) |
+
+## Instalar
+
+- **Instalador:** `Rukes-<versión>-setup-x64.exe` de la página de releases. Se instala para tu
+  usuario, sin administrador.
+- **winget:** `winget install HenryOsorio.Rukes`.
+- **Portable:** descomprime `Rukes-<versión>-portable-x64.zip` donde quieras; con
+  `portable.txt` todo se guarda en la carpeta `data` junto al exe.
 
 ## Compilar
 
@@ -13,6 +32,7 @@ cargo build --release -p rukes-app
 ```
 
 El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (por ejemplo `RUKES_LOG=debug`).
+Para generar el ZIP, el instalador y los manifiestos de winget, ver [`docs/release.md`](docs/release.md).
 
 ## Uso
 
@@ -24,6 +44,8 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `chr`, `informe` | Apps y archivos de tus carpetas |
 | `f: informe`, `d: proyectos`, `contrato .pdf` | Solo archivos, solo carpetas, por extensión |
 | `= 5 km a millas`, `2^10`, `70 F en C` | Calculadora y conversiones (sin `=` también, si parece una operación) |
+| `100 usd a eur`, `#ff5733`, `hsl(11 100% 60%)` | Divisas (con caché sin conexión) y colores en HEX, RGB, HSL y HSV |
+| `vol 50`, `brillo 70`, `wifi off`, `avion`, `oscuro` | Controles del sistema |
 | `hora en Tokio`, `días hasta 25 dic` | Hora y fechas |
 | `github.com`, `g rust lifetimes`, `yt lofi` | Abrir URL o buscar en la web |
 | `> dir`, `> shell:startup` | Comando en la terminal o URI del shell |
@@ -74,6 +96,14 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
   [`plugins-examples`](plugins-examples).
 - **Workflows y triggers:** archivos `.toml` de la carpeta `workflows` junto a `config.toml`
   (la primera vez se crean ejemplos comentados). Los triggers se pausan desde la bandeja.
+- **Autocompletado:** junto a `config.toml` se genera `config.schema.json` (VS Code con Even
+  Better TOML lo usa para autocompletar y validar).
+- **Perfiles de apps:** `[[plugins.apps.profiles]]` lanza una app con argumentos, carpeta y
+  alias propios. Las apps se reindexan solas al cambiar el menú Inicio.
+- **Everything:** si está abierto, la búsqueda de archivos lo usa (`everything = false` en
+  `[plugins.files]` lo desactiva).
+- **Exportar e importar:** «exportar configuración» e «importar <carpeta>», o
+  `rukes.exe --export <carpeta>` / `--import <carpeta>`.
 - **Salir:** escribe «salir» en el launcher o usa el menú del icono de la bandeja.
 - **Iniciar con Windows:** `start_with_windows = true` en `[general]`.
 - **Logs:** `%LOCALAPPDATA%\Rukes\logs`.
@@ -93,6 +123,7 @@ El binario queda en `target/release/rukes.exe`. Nivel de log con `RUKES_LOG` (po
 | `themes/` | Temas incluidos (TOML) |
 | `spikes/` | Prototipos desechables de la fase 0 (workspace aparte) |
 | `docs/decisions/` | ADRs |
+| `packaging/`, `scripts/` | Instalador (Inno Setup), manifiestos de winget, empaquetado y firma |
 
 ## Licencia
 

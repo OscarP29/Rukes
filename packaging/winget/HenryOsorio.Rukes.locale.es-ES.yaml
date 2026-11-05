@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: HenryOsorio.Rukes
+PackageVersion: {{VERSION}}
+PackageLocale: es-ES
+Publisher: Henry Osorio
+PackageName: Rukes
+License: MIT OR Apache-2.0
+ShortDescription: Launcher de teclado para Windows, rápido y ligero, con plugins, scripts y workflows.
+Description: |-
+  Rukes se abre con Alt+Espacio y busca apps, archivos, ventanas y procesos; calcula, convierte
+  unidades y divisas, guarda el historial del portapapeles, snippets, notas y tareas, ejecuta
+  tus scripts y workflows, y admite plugins externos en cualquier lenguaje.
+Moniker: rukes
+Tags:
+  - launcher
+  - productivity
+  - keyboard
+  - search
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

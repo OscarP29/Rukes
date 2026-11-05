@@ -43,6 +43,24 @@ pub fn apps(c: &Config) -> AppsSettings {
     AppsSettings {
         aliases: c.plugins.apps.aliases.clone(),
         include_path: c.plugins.apps.include_path,
+        profiles: c
+            .plugins
+            .apps
+            .profiles
+            .iter()
+            .filter(|p| !p.name.trim().is_empty() && !p.target.trim().is_empty())
+            .map(|p| rukes_plugins::apps::Profile {
+                name: p.name.trim().to_owned(),
+                target: rukes_script::args::expand_path(p.target.trim())
+                    .to_string_lossy()
+                    .into_owned(),
+                args: p.args.clone(),
+                cwd: (!p.cwd.trim().is_empty())
+                    .then(|| rukes_script::args::expand_path(p.cwd.trim())),
+                alias: p.alias.iter().map(|a| a.trim().to_lowercase()).collect(),
+                admin: p.admin,
+            })
+            .collect(),
         priority: c.plugins.apps.priority.clamp(-1.0, 1.0),
     }
 }
@@ -67,6 +85,7 @@ pub fn files(c: &Config) -> rukes_plugins::FilesSettings {
         priority: f.priority,
         shell: c.plugins.shell.shell.clone(),
         terminal: c.general.terminal.clone(),
+        everything: f.everything,
     }
 }
 

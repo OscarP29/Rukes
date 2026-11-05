@@ -98,11 +98,30 @@ struct Cache {
     apps: Vec<App>,
 }
 
+/// Perfil de lanzamiento: una app con argumentos y carpeta propios (RF-033).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Profile {
+    /// Nombre visible («Chrome (trabajo)»).
+    pub name: String,
+    /// Nombre de una app del índice, ruta de un ejecutable o comando del `PATH`.
+    pub target: String,
+    /// Argumentos.
+    pub args: String,
+    /// Carpeta de trabajo.
+    pub cwd: Option<PathBuf>,
+    /// Alias exactos.
+    pub alias: Vec<String>,
+    /// Abrir como administrador.
+    pub admin: bool,
+}
+
 /// Ajustes del plugin.
 #[derive(Debug, Clone, Default)]
 pub struct AppsSettings {
     /// Alias → nombre de app.
     pub aliases: BTreeMap<String, String>,
+    /// Perfiles de lanzamiento (RF-033).
+    pub profiles: Vec<Profile>,
     /// Incluir ejecutables del PATH.
     pub include_path: bool,
     /// Prioridad del plugin.
@@ -228,6 +247,89 @@ impl AppsPlugin {
         it
     }
 
+    /// La app del índice con ese nombre (sin distinguir mayúsculas).
+    fn find_app(index: &[App], name: &str) -> Option<App> {
+        index
+            .iter()
+            .find(|a| a.name.eq_ignore_ascii_case(name.trim()))
+            .cloned()
+    }
+
+    /// Qué lanza un perfil: la app del índice con ese nombre o el destino tal cual.
+    fn profile_target(index: &[App], p: &Profile) -> (String, Icon) {
+        match Self::find_app(index, &p.target) {
+            Some(app) => {
+                let kind = AppKind::from(&app.kind);
+                (kind.launch_target(), Icon::Shell(kind.icon_source()))
+            }
+            None => {
+                let path = PathBuf::from(&p.target);
+                let icon = if path.is_file() {
+                    Icon::File(path)
+                } else {
+                    Icon::Shell(p.target.clone())
+                };
+                (p.target.clone(), icon)
+            }
+        }
+    }
+
+    fn profile_items(&self, index: &[App], text: &str) -> Vec<ResultItem> {
+        let q = text.trim().to_lowercase();
+        let mut f = Fuzzy::new(text);
+        let mut out = Vec::new();
+        for (i, p) in self.settings.profiles.iter().enumerate() {
+            let alias = p.alias.iter().any(|a| a.to_lowercase() == q);
+            let Some(score) = (if alias { Some(1.0) } else { f.score(&p.name) }) else {
+                continue;
+            };
+            let (_, icon) = Self::profile_target(index, p);
+            let mut it = ResultItem::new(format!("prof:{}", p.name.to_lowercase()), p.name.clone());
+            it.subtitle = format!("{} {}", p.target, p.args).trim().to_owned();
+            if let Some(c) = &p.cwd {
+                it.subtitle.push_str(&format!(" · {}", c.display()));
+            }
+            it.icon = icon;
+            it.fuzzy = score;
+            it.alias_match = alias;
+            it.payload = i.to_string();
+            if !p.admin {
+                it.actions
+                    .push(Action::new(ActionId::RUN_AS_ADMIN, "action.run_as_admin"));
+            }
+            out.push(it);
+        }
+        out
+    }
+
+    fn launch_profile(
+        &self,
+        item: &ResultItem,
+        action: &str,
+    ) -> Result<ActionOutcome, PluginError> {
+        let p = item
+            .payload
+            .parse::<usize>()
+            .ok()
+            .and_then(|i| self.settings.profiles.get(i))
+            .ok_or_else(|| PluginError::Failed("perfil desconocido".into()))?;
+        let index = self
+            .index
+            .read()
+            .map(|i| Arc::clone(&i))
+            .unwrap_or_default();
+        let (target, _) = Self::profile_target(&index, p);
+        let verb = if p.admin || action == ActionId::RUN_AS_ADMIN {
+            Verb::RunAs
+        } else {
+            Verb::Open
+        };
+        let args = (!p.args.trim().is_empty()).then_some(p.args.as_str());
+        shell::launch(&target, args, p.cwd.as_deref(), verb)
+            .map(|()| ActionOutcome::Hide)
+            .map_err(|e| PluginError::Failed(e.to_string()))
+    }
+
     /// Búsqueda pura sobre el índice (sin E/S).
     pub fn search(&self, text: &str, cancel: &CancelToken) -> Vec<ResultItem> {
         let index = self
@@ -251,6 +353,7 @@ impl AppsPlugin {
             }
             out.push(Self::to_item(app, s, alias));
         }
+        out.extend(self.profile_items(&index, text));
         out.sort_by(|a, b| b.fuzzy.total_cmp(&a.fuzzy));
         out.truncate(MAX_RESULTS);
         out
@@ -278,6 +381,9 @@ impl Plugin for AppsPlugin {
     }
 
     fn execute(&self, item: &ResultItem, action: &str) -> Result<ActionOutcome, PluginError> {
+        if item.id.starts_with("prof:") {
+            return self.launch_profile(item, action);
+        }
         let kind: Kind = serde_json::from_str(&item.payload)
             .map_err(|e| PluginError::Failed(format!("payload no válido: {e}")))?;
         let kind = AppKind::from(&kind);
@@ -377,10 +483,30 @@ mod tests {
                     .collect(),
                 include_path: true,
                 priority: 0.0,
+                profiles: vec![Profile {
+                    name: "Chrome (trabajo)".into(),
+                    target: "google chrome".into(),
+                    args: "--profile-directory=\"Profile 1\"".into(),
+                    cwd: None,
+                    alias: vec!["cw".into()],
+                    admin: false,
+                }],
             },
             PathBuf::from("unused.json"),
             dedupe(apps),
         )
+    }
+
+    #[test]
+    fn profiles_match_by_name_and_alias_and_use_the_app_icon() {
+        let p = plugin(vec![lnk("Google Chrome", Some("C:/chrome.exe"))], &[]);
+        let r = p.search("cw", &CancelToken::new());
+        assert_eq!(r[0].title, "Chrome (trabajo)");
+        assert!(r[0].alias_match);
+        assert!(matches!(r[0].icon, Icon::Shell(_)));
+        assert!(r[0].subtitle.contains("Profile 1"));
+        let r = p.search("chrome trab", &CancelToken::new());
+        assert!(r.iter().any(|i| i.id.starts_with("prof:")));
     }
 
     #[test]

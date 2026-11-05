@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Configuración principal.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Config {
     /// Ajustes generales.
@@ -23,7 +23,7 @@ pub struct Config {
 }
 
 /// `[workflows]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Workflows {
     /// Activo.
@@ -45,7 +45,7 @@ impl Default for Workflows {
 }
 
 /// `[scripts]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Scripts {
     /// Activo.
@@ -89,7 +89,7 @@ impl Default for Scripts {
 }
 
 /// `[general]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct General {
     /// Atajo global (RF-001).
@@ -124,7 +124,9 @@ impl Default for General {
 }
 
 /// Posición de la ventana (RF-002).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowPosition {
     /// Centrada (un poco por encima del centro).
@@ -135,7 +137,9 @@ pub enum WindowPosition {
 }
 
 /// Qué hacer con la búsqueda anterior al mostrar la ventana (RF-004).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum OnShow {
     /// Vaciar.
@@ -148,7 +152,7 @@ pub enum OnShow {
 }
 
 /// `[window]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Window {
     /// Posición.
@@ -191,7 +195,7 @@ impl Default for Window {
 }
 
 /// `[search]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Search {
     /// Peso de la frecency en el ranking (0..1).
@@ -210,7 +214,7 @@ impl Default for Search {
 }
 
 /// `[plugins]`
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Plugins {
     /// Plugin de aplicaciones.
@@ -225,6 +229,8 @@ pub struct Plugins {
     pub windows: PluginCommon,
     /// Procesos.
     pub processes: PluginCommon,
+    /// Volumen, brillo, Wi-Fi, Bluetooth, modo avión y modo oscuro (RF-063).
+    pub controls: PluginCommon,
     /// Generadores, hashes y codificadores.
     pub generators: Generators,
     /// Archivos y carpetas.
@@ -242,7 +248,7 @@ pub struct Plugins {
 }
 
 /// `[plugins.wall]` (RF-180)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Wall {
     /// Activo.
@@ -276,7 +282,7 @@ impl Default for Wall {
 }
 
 /// `[plugins.external]` (RF-170..RF-173)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct External {
     /// Cargar plugins externos.
@@ -296,7 +302,7 @@ impl Default for External {
 }
 
 /// `[plugins.clipboard]` (sección 5.10)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Clipboard {
     /// Activo. Desactivado no se escucha el portapapeles ni se guarda nada (RF-104).
@@ -341,7 +347,7 @@ impl Default for Clipboard {
 }
 
 /// `[plugins.snippets]` (sección 5.11)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Snippets {
     /// Activo.
@@ -366,7 +372,7 @@ impl Default for Snippets {
 }
 
 /// `[plugins.notes]` (sección 5.12)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Notes {
     /// Activo (notas, tareas y recordatorios).
@@ -388,7 +394,7 @@ impl Default for Notes {
 }
 
 /// `[plugins.calc]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Calc {
     /// Activo.
@@ -397,6 +403,14 @@ pub struct Calc {
     pub prefix: String,
     /// Evaluar también sin prefijo si la consulta parece una expresión.
     pub auto: bool,
+    /// Conversión de divisas (`100 usd a eur`, RF-072).
+    pub currency: bool,
+    /// Actualizar las tasas en línea (open.er-api.com, como mucho dos veces al día). Desactivado
+    /// por defecto: Rukes no se conecta a la red si no lo activas (sección 8). Sin esto se usan
+    /// las de la caché.
+    pub currency_online: bool,
+    /// Conversor de colores (`#ff5733`, `rgb(...)`, `hsl(...)`, RF-075).
+    pub colors: bool,
 }
 
 impl Default for Calc {
@@ -405,12 +419,15 @@ impl Default for Calc {
             enabled: true,
             prefix: "=".into(),
             auto: true,
+            currency: true,
+            currency_online: false,
+            colors: true,
         }
     }
 }
 
 /// `[plugins.web]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Web {
     /// Activo.
@@ -441,7 +458,7 @@ impl Default for Web {
 }
 
 /// `[plugins.shell]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Shell {
     /// Activo.
@@ -469,7 +486,7 @@ impl Default for Shell {
 }
 
 /// `[plugins.generators]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Generators {
     /// Activo.
@@ -491,7 +508,7 @@ impl Default for Generators {
 }
 
 /// `[plugins.files]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Files {
     /// Activo.
@@ -506,6 +523,8 @@ pub struct Files {
     pub include_hidden: bool,
     /// Caracteres mínimos para buscar archivos sin prefijo.
     pub min_chars: usize,
+    /// Si Everything (voidtools) está abierto, buscar con él en todo el disco (RF-041).
+    pub everything: bool,
 }
 
 impl Default for Files {
@@ -538,12 +557,13 @@ impl Default for Files {
             .collect(),
             include_hidden: false,
             min_chars: 3,
+            everything: true,
         }
     }
 }
 
 /// Ajustes comunes a todos los plugins (RF-205).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct PluginCommon {
     /// Activo.
@@ -562,7 +582,7 @@ impl Default for PluginCommon {
 }
 
 /// `[plugins.apps]`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct Apps {
     /// Activo.
@@ -573,6 +593,26 @@ pub struct Apps {
     pub aliases: BTreeMap<String, String>,
     /// Incluir ejecutables del `PATH` (RF-030).
     pub include_path: bool,
+    /// Perfiles de lanzamiento: app con argumentos y carpeta (RF-033).
+    pub profiles: Vec<AppProfile>,
+}
+
+/// `[[plugins.apps.profiles]]` (RF-033)
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct AppProfile {
+    /// Nombre visible.
+    pub name: String,
+    /// Nombre de la app (como en el menú Inicio), ruta de un ejecutable o comando del `PATH`.
+    pub target: String,
+    /// Argumentos.
+    pub args: String,
+    /// Carpeta de trabajo. Admite `~` y `%VAR%`.
+    pub cwd: String,
+    /// Alias exactos.
+    pub alias: Vec<String>,
+    /// Abrir siempre como administrador.
+    pub admin: bool,
 }
 
 impl Default for Apps {
@@ -582,6 +622,7 @@ impl Default for Apps {
             priority: 0.0,
             aliases: BTreeMap::new(),
             include_path: true,
+            profiles: Vec::new(),
         }
     }
 }
