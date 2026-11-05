@@ -11,8 +11,8 @@ use crossbeam_channel::{Receiver, Sender};
 
 use crate::ranking::{self, ScoreInput};
 use crate::{
-    ActionOutcome, CancelToken, Frecency, Plugin, PluginError, PluginMetadata, Query, QueryId,
-    ResultItem,
+    ActionOutcome, CancelToken, Frecency, Plugin, PluginCommand, PluginError, PluginMetadata,
+    Query, QueryId, ResultItem,
 };
 
 /// Ajustes del motor.
@@ -241,6 +241,39 @@ impl Engine {
             Err(_) => {}
         }
         result
+    }
+
+    /// Llama al comando `command` del plugin `plugin_id` (ver [`Plugin::call`]). Es la vía para
+    /// que un plugin o un script use a otro: crear una nota, una tarea, un recordatorio...
+    /// Un pánico del plugin se convierte en error.
+    pub fn call(
+        &self,
+        plugin_id: &str,
+        command: &str,
+        args: &serde_json::Value,
+    ) -> Result<serde_json::Value, PluginError> {
+        let plugins = self.snapshot();
+        let reg = plugins
+            .iter()
+            .find(|r| r.meta.id == plugin_id)
+            .ok_or_else(|| PluginError::Failed(format!("plugin desconocido: {plugin_id}")))?;
+        catch_unwind(AssertUnwindSafe(|| reg.plugin.call(command, args))).unwrap_or_else(|_| {
+            tracing::error!(plugin = %plugin_id, command, "pánico en un comando");
+            Err(PluginError::Failed("el plugin falló".into()))
+        })
+    }
+
+    /// Comandos de todos los plugins activos: `(id del plugin, comando)`.
+    pub fn commands(&self) -> Vec<(String, PluginCommand)> {
+        let plugins = self.snapshot();
+        plugins
+            .iter()
+            .flat_map(|r| {
+                let cmds =
+                    catch_unwind(AssertUnwindSafe(|| r.plugin.commands())).unwrap_or_default();
+                cmds.into_iter().map(|c| (r.meta.id.clone(), c))
+            })
+            .collect()
     }
 
     /// Lanza `refresh` de todos los plugins en un hilo aparte.
@@ -626,6 +659,70 @@ mod tests {
         assert_eq!(b[0].plugin_id, "good");
         // El pool sigue vivo.
         assert_eq!(collect(&e, "chrome", Duration::from_millis(200)).len(), 1);
+    }
+
+    struct Echo;
+
+    impl Plugin for Echo {
+        fn metadata(&self) -> PluginMetadata {
+            PluginMetadata {
+                id: "echo".into(),
+                name: "echo".into(),
+                prefix: None,
+                keywords: vec![],
+                priority: 0.0,
+                global: false,
+                list_on_keyword: false,
+            }
+        }
+        fn query(&self, _: &Query, _: &CancelToken, _: &mut dyn FnMut(Vec<ResultItem>)) {}
+        fn execute(&self, _: &ResultItem, _: &str) -> Result<ActionOutcome, PluginError> {
+            Ok(ActionOutcome::Hide)
+        }
+        fn commands(&self) -> Vec<PluginCommand> {
+            vec![PluginCommand::new("echo", "devuelve los argumentos")]
+        }
+        fn call(
+            &self,
+            command: &str,
+            args: &serde_json::Value,
+        ) -> Result<serde_json::Value, PluginError> {
+            match command {
+                "echo" => Ok(args.clone()),
+                "boom" => panic!("boom"),
+                other => Err(PluginError::UnknownCommand(other.into())),
+            }
+        }
+    }
+
+    #[test]
+    fn plugins_call_each_other_through_the_engine() {
+        let e = Engine::new(1, EngineConfig::default(), Frecency::default());
+        e.set_plugins(vec![
+            Arc::new(Echo),
+            Arc::new(ListPlugin::new("apps", vec![])),
+        ]);
+        let args = serde_json::json!({ "text": "hola" });
+        assert_eq!(e.call("echo", "echo", &args).unwrap(), args);
+        assert!(matches!(
+            e.call("echo", "nada", &args),
+            Err(PluginError::UnknownCommand(c)) if c == "nada"
+        ));
+        // Un plugin sin comandos y uno que no existe.
+        assert!(matches!(
+            e.call("apps", "echo", &args),
+            Err(PluginError::UnknownCommand(_))
+        ));
+        assert!(e.call("nadie", "echo", &args).is_err());
+        // Un pánico queda aislado.
+        assert!(e.call("echo", "boom", &args).is_err());
+        assert_eq!(
+            e.commands(),
+            vec![(
+                "echo".to_owned(),
+                PluginCommand::new("echo", "devuelve los argumentos")
+            )]
+        );
     }
 
     #[test]

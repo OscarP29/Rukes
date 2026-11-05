@@ -19,5 +19,5 @@ pub use frecency::Frecency;
 pub use fuzzy::Fuzzy;
 pub use help::{HelpUsage, PluginHelp};
 pub use item::{Action, ActionId, Icon, ResultItem};
-pub use plugin::{ActionOutcome, Plugin, PluginError, PluginMetadata};
+pub use plugin::{ActionOutcome, Plugin, PluginCommand, PluginError, PluginMetadata};
 pub use query::{CancelToken, Query, QueryId};

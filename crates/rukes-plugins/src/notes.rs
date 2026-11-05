@@ -19,10 +19,11 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use rukes_core::i18n::{tr, trf};
 use rukes_core::{
-    Action, ActionId, ActionOutcome, CancelToken, Fuzzy, Icon, Plugin, PluginError, PluginMetadata,
-    Query, ResultItem,
+    Action, ActionId, ActionOutcome, CancelToken, Fuzzy, Icon, Plugin, PluginCommand, PluginError,
+    PluginMetadata, Query, ResultItem,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 use crate::util::{ellipsis, now_unix};
 
@@ -67,6 +68,29 @@ pub fn append_line(path: &Path, header: &str, line: &str) -> std::io::Result<()>
     text.push_str(line);
     text.push_str(nl);
     std::fs::write(path, text)
+}
+
+// ------------------------------------------------- comandos (Plugin::call)
+
+/// Texto del argumento `name`; error si falta o está vacío.
+fn text_arg<'a>(args: &'a Value, name: &str) -> Result<&'a str, PluginError> {
+    args[name]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| PluginError::BadArgs(format!("falta «{name}» (texto)")))
+}
+
+/// Número entero opcional `name`, o `default`.
+fn usize_arg(args: &Value, name: &str, default: usize) -> usize {
+    args[name]
+        .as_u64()
+        .map_or(default, |n| usize::try_from(n).unwrap_or(usize::MAX))
+}
+
+/// Una línea de texto no puede romper el formato Markdown de la lista.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Texto de una línea sin la viñeta: `- [ ] texto` → `texto` si coincide con `marker`.
@@ -162,6 +186,28 @@ impl Plugin for NotesPlugin {
             return Ok(ActionOutcome::Hide);
         }
         open_file(&self.file)
+    }
+
+    fn commands(&self) -> Vec<PluginCommand> {
+        vec![
+            PluginCommand::new("add", "Añade una nota con fecha. #{text} → #{text, file}"),
+            PluginCommand::new(
+                "list",
+                "Últimas notas, la más reciente primero. #{limit: 10} → [texto]",
+            ),
+        ]
+    }
+
+    fn call(&self, command: &str, args: &Value) -> Result<Value, PluginError> {
+        match command {
+            "add" => {
+                let text = one_line(text_arg(args, "text")?);
+                self.add(&text).map_err(failed)?;
+                Ok(json!({ "text": text, "file": self.file.display().to_string() }))
+            }
+            "list" => Ok(json!(self.recent(usize_arg(args, "limit", 10)))),
+            other => Err(PluginError::UnknownCommand(other.into())),
+        }
     }
 }
 
@@ -313,6 +359,44 @@ impl Plugin for TodoPlugin {
             return Err(PluginError::Failed(tr("todo.gone").into()));
         }
         Ok(ActionOutcome::ReplaceQuery(raw.to_owned()))
+    }
+
+    fn commands(&self) -> Vec<PluginCommand> {
+        vec![
+            PluginCommand::new("add", "Añade una tarea pendiente. #{text} → #{text, file}"),
+            PluginCommand::new(
+                "list",
+                "Tareas pendientes en el orden del archivo. → [#{line, text}]",
+            ),
+            PluginCommand::new(
+                "complete",
+                "Marca como hecha la tarea con ese texto exacto. #{text} → true si existía",
+            ),
+        ]
+    }
+
+    fn call(&self, command: &str, args: &Value) -> Result<Value, PluginError> {
+        match command {
+            "add" => {
+                let text = one_line(text_arg(args, "text")?);
+                self.add(&text).map_err(failed)?;
+                Ok(json!({ "text": text, "file": self.file.display().to_string() }))
+            }
+            "list" => Ok(Value::Array(
+                self.pending()
+                    .into_iter()
+                    .map(|t| json!({ "line": t.line, "text": t.text }))
+                    .collect(),
+            )),
+            "complete" => {
+                let task = Task {
+                    line: usize_arg(args, "line", usize::MAX),
+                    text: text_arg(args, "text")?.to_owned(),
+                };
+                Ok(json!(self.complete(&task).map_err(failed)?))
+            }
+            other => Err(PluginError::UnknownCommand(other.into())),
+        }
     }
 }
 
@@ -639,6 +723,72 @@ impl Plugin for RemindPlugin {
             _ => Ok(ActionOutcome::KeepOpen),
         }
     }
+
+    fn commands(&self) -> Vec<PluginCommand> {
+        vec![
+            PluginCommand::new(
+                "add",
+                "Crea un recordatorio. #{when: \"15m\" | \"1h30m\" | \"14:30\"} o #{seconds} o \
+                 #{at: segundos Unix}, y #{text} → #{id, due, text}",
+            ),
+            PluginCommand::new(
+                "list",
+                "Pendientes, el más próximo primero. → [#{id, due, text}]",
+            ),
+            PluginCommand::new("cancel", "Cancela uno. #{id} → true si existía"),
+        ]
+    }
+
+    fn call(&self, command: &str, args: &Value) -> Result<Value, PluginError> {
+        let json_of = |r: &Reminder| json!({ "id": r.id, "due": r.due, "text": r.text });
+        match command {
+            "add" => {
+                let secs = reminder_delay(args, now_unix())?;
+                let text = args["text"].as_str().map(one_line).unwrap_or_default();
+                Ok(json_of(&self.store.add(secs, &text)))
+            }
+            "list" => Ok(Value::Array(
+                self.store.pending().iter().map(json_of).collect(),
+            )),
+            "cancel" => {
+                let id = args["id"]
+                    .as_u64()
+                    .ok_or_else(|| PluginError::BadArgs("falta «id» (número)".into()))?;
+                Ok(json!(self.store.cancel(id)))
+            }
+            other => Err(PluginError::UnknownCommand(other.into())),
+        }
+    }
+}
+
+/// Máximo de antelación de un recordatorio.
+const MAX_DELAY: u64 = 366 * 86_400;
+
+/// Segundos hasta que venza un recordatorio pedido con `when`, `seconds` o `at` (Unix).
+fn reminder_delay(args: &Value, now: u64) -> Result<u64, PluginError> {
+    let secs = if let Some(w) = args["when"].as_str() {
+        let t = rukes_platform::time::local_now();
+        parse_when(w, (t.hour, t.minute, t.second)).ok_or_else(|| {
+            PluginError::BadArgs(format!(
+                "«when» no válido: {w} (usa 15m, 1h30m, 2d o 14:30)"
+            ))
+        })?
+    } else if let Some(s) = args["seconds"].as_u64() {
+        s
+    } else if let Some(at) = args["at"].as_u64() {
+        at.checked_sub(now)
+            .ok_or_else(|| PluginError::BadArgs("«at» ya pasó".into()))?
+    } else {
+        return Err(PluginError::BadArgs(
+            "falta «when» (15m, 14:30...), «seconds» o «at»".into(),
+        ));
+    };
+    if secs > MAX_DELAY {
+        return Err(PluginError::BadArgs(
+            "como mucho un año de antelación".into(),
+        ));
+    }
+    Ok(secs)
 }
 
 #[cfg(test)]
@@ -732,6 +882,87 @@ mod tests {
             ActionOutcome::ReplaceQuery(r) if r == "todo "
         ));
         assert!(todo.pending().is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn commands_for_other_plugins_and_scripts() {
+        let _ = rukes_core::i18n::set_language("es", "");
+        let dir = tmp("cmds");
+        let notes = NotesPlugin {
+            file: dir.join("n.md"),
+        };
+        let r = notes
+            .call("add", &json!({ "text": "desde\nTelegram  " }))
+            .unwrap();
+        assert_eq!(r["text"], "desde Telegram");
+        assert!(notes.recent(1)[0].ends_with("— desde Telegram"));
+        assert!(
+            notes.call("list", &json!({})).unwrap()[0]
+                .as_str()
+                .unwrap()
+                .ends_with("desde Telegram")
+        );
+        assert!(matches!(
+            notes.call("add", &json!({ "text": "  " })),
+            Err(PluginError::BadArgs(_))
+        ));
+        assert!(matches!(
+            notes.call("borrar", &json!({})),
+            Err(PluginError::UnknownCommand(_))
+        ));
+
+        let todo = TodoPlugin {
+            file: dir.join("t.md"),
+        };
+        todo.call("add", &json!({ "text": "pan" })).unwrap();
+        assert_eq!(
+            todo.call("list", &json!(null)).unwrap(),
+            json!([{ "line": 2, "text": "pan" }])
+        );
+        assert_eq!(
+            todo.call("complete", &json!({ "text": "pan" })).unwrap(),
+            json!(true)
+        );
+        assert_eq!(
+            todo.call("complete", &json!({ "text": "pan" })).unwrap(),
+            json!(false)
+        );
+
+        let remind = RemindPlugin {
+            store: RemindStore::open(dir.join("r.json")),
+        };
+        let r = remind
+            .call("add", &json!({ "seconds": 600, "text": "té" }))
+            .unwrap();
+        assert_eq!(r["text"], "té");
+        let id = r["id"].as_u64().unwrap();
+        assert!(remind.call("add", &json!({ "when": "15m" })).is_ok());
+        for bad in [
+            json!({ "when": "pronto" }),
+            json!({ "at": 1 }),
+            json!({ "seconds": 400 * 86_400 }),
+            json!({ "text": "sin cuándo" }),
+        ] {
+            assert!(
+                matches!(remind.call("add", &bad), Err(PluginError::BadArgs(_))),
+                "{bad}"
+            );
+        }
+        assert_eq!(remind.call("list", &json!({})).unwrap()[0]["id"], id);
+        assert_eq!(
+            remind.call("cancel", &json!({ "id": id })).unwrap(),
+            json!(true)
+        );
+        assert_eq!(
+            remind
+                .call("list", &json!({}))
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 

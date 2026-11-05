@@ -55,9 +55,34 @@ pub enum PluginError {
     /// La acción no existe para este resultado.
     #[error("acción no soportada: {0}")]
     UnsupportedAction(String),
+    /// El plugin no tiene ese comando (ver [`Plugin::call`]).
+    #[error("comando desconocido: {0}")]
+    UnknownCommand(String),
+    /// Argumentos no válidos para un comando.
+    #[error("argumentos no válidos: {0}")]
+    BadArgs(String),
     /// Fallo al ejecutar.
     #[error("{0}")]
     Failed(String),
+}
+
+/// Comando que un plugin ofrece a los demás y a los scripts (ver [`Plugin::call`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginCommand {
+    /// Nombre (`add`, `list`...).
+    pub name: String,
+    /// Qué hace, sus argumentos y qué devuelve.
+    pub description: String,
+}
+
+impl PluginCommand {
+    /// Comando con su descripción.
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+        }
+    }
 }
 
 /// Un plugin de búsqueda.
@@ -82,5 +107,20 @@ pub trait Plugin: Send + Sync {
     /// sección `[usage.<id>]` (ver [`PluginHelp::from_i18n`]); `None` si no tiene.
     fn help(&self) -> Option<crate::PluginHelp> {
         crate::PluginHelp::from_i18n(&self.metadata().id)
+    }
+
+    /// Comandos que acepta [`Plugin::call`]. Por defecto ninguno.
+    fn commands(&self) -> Vec<PluginCommand> {
+        Vec::new()
+    }
+
+    /// Ejecuta un comando sin interfaz (lo usan otros plugins y los scripts a través de
+    /// [`crate::Engine::call`]). Recibe y devuelve JSON. Puede llamarse desde cualquier hilo.
+    fn call(
+        &self,
+        command: &str,
+        _args: &serde_json::Value,
+    ) -> Result<serde_json::Value, PluginError> {
+        Err(PluginError::UnknownCommand(command.into()))
     }
 }

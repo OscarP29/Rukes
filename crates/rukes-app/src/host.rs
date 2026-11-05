@@ -967,6 +967,7 @@ impl AppHost {
                 }
             }),
             context: Arc::new(move || c.upgrade().map(|h| h.context()).unwrap_or_default()),
+            engine: Arc::downgrade(&self.engine),
         };
         let plugin = Arc::new(ScriptsPlugin::new(catalog, runs, settings, hooks));
         *self

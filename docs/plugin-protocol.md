@@ -187,6 +187,27 @@ resultado dice qué hacer después:
 | `{"open": "ruta o URL"}` | Abrir con el programa predeterminado y ocultar |
 | `{"results": [ … ]}` | Sustituir la lista por estos resultados (submenús) |
 
+## Comandos de otros plugins
+
+Algunos plugins integrados ofrecen comandos sin interfaz para que otros los usen:
+
+| Plugin | Comando | Argumentos → resultado |
+| --- | --- | --- |
+| `notes` | `add` | `{text}` → `{text, file}` |
+| `notes` | `list` | `{limit: 10}` → `["texto", …]` |
+| `todo` | `add` | `{text}` → `{text, file}` |
+| `todo` | `list` | → `[{line, text}, …]` |
+| `todo` | `complete` | `{text}` → `true` si existía |
+| `remind` | `add` | `{when: "15m" \| "1h30m" \| "14:30"}`, `{seconds}` o `{at}` (Unix) y `{text}` → `{id, due, text}` |
+| `remind` | `list` | → `[{id, due, text}, …]` |
+| `remind` | `cancel` | `{id}` → `true` si existía |
+
+Hoy se usan desde los plugins integrados (`Engine::call`) y desde los scripts Rhai
+(`plugin_call("remind", "add", #{ when: "15m", text: "té" })`, o los atajos `note_add`,
+`todo_add` y `remind`; ver [`scripts-examples/telegram.rhai`](../scripts-examples/telegram.rhai)).
+Los plugins externos aún no pueden llamarlos (el protocolo v1 solo va de Rukes al plugin); mientras tanto, un
+plugin externo puede escribir directamente en los Markdown de notas y tareas.
+
 ## Plugin mínimo en Python
 
 ```python

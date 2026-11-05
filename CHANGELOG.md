@@ -4,6 +4,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Unreleased]
 
+### Comandos entre plugins y scripts
+
+#### Añadido
+- Los plugins pueden ofrecer comandos sin interfaz: `Plugin::commands` y `Plugin::call`
+  (JSON de entrada y de salida) y `Engine::call(plugin, comando, args)` para usarlos desde otro
+  plugin. Un pánico del plugin llamado se convierte en error.
+- Comandos de `notes` (`add`, `list`), `todo` (`add`, `list`, `complete`) y `remind` (`add`
+  con `when` / `seconds` / `at`, `list`, `cancel`).
+- Rhai: `plugin_call(plugin, comando[, args])`, `plugin_commands()` y los atajos
+  `note_add(texto)`, `todo_add(texto)` y `remind(cuándo, texto)`.
+- Ejemplo `scripts-examples/telegram.rhai`: un bot de Telegram que crea notas, tareas y
+  recordatorios; con un trigger `every = "1m"` revisa los mensajes solo.
+
 ### Ayuda de comandos y peticiones HTTP
 
 #### Añadido

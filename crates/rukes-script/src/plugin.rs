@@ -74,6 +74,8 @@ pub struct Hooks {
     pub results: Arc<dyn Fn(String, Vec<ResultItem>) + Send + Sync>,
     /// Contexto de la ventana activa.
     pub context: Arc<dyn Fn() -> RunContext + Send + Sync>,
+    /// Motor, para que los scripts Rhai llamen a los comandos de los plugins.
+    pub engine: std::sync::Weak<rukes_core::Engine>,
 }
 
 /// Plugin de scripts.
@@ -600,6 +602,7 @@ impl ScriptsPlugin {
                 cancel,
                 notify: Arc::clone(&self.hooks.notify),
                 job,
+                engine: self.hooks.engine.clone(),
             });
             return Outcome {
                 exit: o.exit,
@@ -1207,6 +1210,7 @@ mod tests {
                 active_window: "Ventana de prueba".into(),
                 ..RunContext::default()
             }),
+            engine: std::sync::Weak::new(),
         };
         let settings = Settings {
             editor: "notepad".into(),

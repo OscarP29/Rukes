@@ -5,7 +5,7 @@
 //! ambas cosas mientras avanza y también dentro de `sleep`, `run` y `http`.
 
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use rhai::{Array, Dynamic, Engine, EvalAltResult, ImmutableString, Map, Position, Scope};
@@ -39,6 +39,8 @@ pub struct Input<'a> {
     pub notify: Notifier,
     /// Job del proceso que lance `run`, para cancelarlo.
     pub job: Arc<JobSlot>,
+    /// Motor, para llamar a los comandos de otros plugins (`plugin_call`, `note_add`...).
+    pub engine: Weak<rukes_core::Engine>,
 }
 
 /// Resultado.
@@ -120,6 +122,27 @@ fn http_call(
         Dynamic::from(String::from_utf8_lossy(&r.body).into_owned()),
     );
     Ok(m)
+}
+
+/// Llama al comando de un plugin a través del motor.
+fn plugin_call(
+    engine: &Weak<rukes_core::Engine>,
+    plugin: &str,
+    command: &str,
+    args: &Dynamic,
+) -> Result<Dynamic, Box<EvalAltResult>> {
+    let engine = engine
+        .upgrade()
+        .ok_or_else(|| err("los comandos de plugins no están disponibles"))?;
+    let args: serde_json::Value = if args.is_unit() {
+        serde_json::Value::Null
+    } else {
+        rhai::serde::from_dynamic(args)?
+    };
+    let v = engine
+        .call(plugin, command, &args)
+        .map_err(|e| err(format!("{plugin}.{command}: {e}")))?;
+    rhai::serde::to_dynamic(v)
 }
 
 fn find_window(pattern: &str) -> Option<rukes_platform::winlist::WindowInfo> {
@@ -325,6 +348,65 @@ fn engine(input: &Input<'_>, out: Arc<Mutex<String>>) -> Engine {
         });
     }
 
+    {
+        let en = input.engine.clone();
+        e.register_fn("plugin_call", move |plugin: &str, command: &str| {
+            plugin_call(&en, plugin, command, &Dynamic::UNIT)
+        });
+    }
+    {
+        let en = input.engine.clone();
+        e.register_fn(
+            "plugin_call",
+            move |plugin: &str, command: &str, args: Dynamic| {
+                plugin_call(&en, plugin, command, &args)
+            },
+        );
+    }
+    {
+        let en = input.engine.clone();
+        e.register_fn("plugin_commands", move || -> Array {
+            en.upgrade()
+                .map(|e| e.commands())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(plugin, c)| {
+                    let mut m = Map::new();
+                    m.insert("plugin".into(), Dynamic::from(plugin));
+                    m.insert("command".into(), Dynamic::from(c.name));
+                    m.insert("description".into(), Dynamic::from(c.description));
+                    Dynamic::from_map(m)
+                })
+                .collect()
+        });
+    }
+    // Atajos de lo más usado.
+    {
+        let en = input.engine.clone();
+        e.register_fn("note_add", move |text: &str| {
+            let mut a = Map::new();
+            a.insert("text".into(), Dynamic::from(text.to_owned()));
+            plugin_call(&en, "notes", "add", &Dynamic::from_map(a))
+        });
+    }
+    {
+        let en = input.engine.clone();
+        e.register_fn("todo_add", move |text: &str| {
+            let mut a = Map::new();
+            a.insert("text".into(), Dynamic::from(text.to_owned()));
+            plugin_call(&en, "todo", "add", &Dynamic::from_map(a))
+        });
+    }
+    {
+        let en = input.engine.clone();
+        e.register_fn("remind", move |when: &str, text: &str| {
+            let mut a = Map::new();
+            a.insert("when".into(), Dynamic::from(when.to_owned()));
+            a.insert("text".into(), Dynamic::from(text.to_owned()));
+            plugin_call(&en, "remind", "add", &Dynamic::from_map(a))
+        });
+    }
+
     e.register_fn(
         "parse_json",
         |text: &str| -> Result<Dynamic, Box<EvalAltResult>> {
@@ -420,6 +502,7 @@ mod tests {
             cancel: Arc::new(|| false),
             notify,
             job: Arc::new(JobSlot::default()),
+            engine: Weak::new(),
         }
     }
 
@@ -522,6 +605,132 @@ mod tests {
         assert_eq!(items[0].title.trim(), "hola");
         assert_eq!(items[0].open.as_deref(), Some("https://x"));
         assert_eq!(*seen.lock().unwrap(), ["test:n1", "T:n2"]);
+    }
+
+    #[test]
+    fn scripts_call_plugin_commands() {
+        use rukes_plugins::{NotesPlugin, RemindPlugin, RemindStore, TodoPlugin};
+        let _ = rukes_core::i18n::set_language("es", "");
+        let dir = std::env::temp_dir().join(format!("rukes-rhai-cmds-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let engine = Arc::new(rukes_core::Engine::new(
+            1,
+            rukes_core::EngineConfig::default(),
+            rukes_core::Frecency::default(),
+        ));
+        engine.set_plugins(vec![
+            Arc::new(NotesPlugin {
+                file: dir.join("notas.md"),
+            }),
+            Arc::new(TodoPlugin {
+                file: dir.join("tareas.md"),
+            }),
+            Arc::new(RemindPlugin {
+                store: RemindStore::open(dir.join("r.json")),
+            }),
+        ]);
+        let mut i = input(
+            r#"
+            note_add("idea desde Rhai");
+            todo_add("comprar pan");
+            let r = remind("15m", "llamar a Ana");
+            plugin_call("todo", "complete", #{ text: "comprar pan" });
+            let pend = plugin_call("remind", "list");
+            let cmds = plugin_commands().filter(|c| c.plugin == "remind").len();
+            `${r.text}|${pend.len()}|${cmds}|${plugin_call("notes", "list", #{ limit: 1 })[0]}`
+            "#,
+            None,
+            quiet(),
+        );
+        i.engine = Arc::downgrade(&engine);
+        let r = run(&i);
+        assert_eq!(r.exit, Exit::Code(0), "{}", r.stderr);
+        let (head, note) = r.stdout.rsplit_once('|').unwrap();
+        assert_eq!(head, "llamar a Ana|1|3");
+        assert!(note.ends_with("— idea desde Rhai"));
+        let todo = std::fs::read_to_string(dir.join("tareas.md")).unwrap();
+        assert!(todo.contains("- [x] comprar pan"));
+
+        // Errores del plugin: el script falla con un mensaje claro.
+        let mut i = input(r#"remind("pronto", "x")"#, None, quiet());
+        i.engine = Arc::downgrade(&engine);
+        let r = run(&i);
+        assert_eq!(r.exit, Exit::Code(1));
+        assert!(r.stderr.contains("remind.add"), "{}", r.stderr);
+        // Sin motor (o con el plugin desactivado).
+        let r = run(&input(r#"note_add("x")"#, None, quiet()));
+        assert_eq!(r.exit, Exit::Code(1));
+        drop(engine);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// La lógica del ejemplo `scripts-examples/telegram.rhai` sin llamar a Telegram: se ejecuta
+    /// todo hasta la primera petición y luego `handle` con varios mensajes.
+    #[test]
+    fn telegram_example_handles_messages() {
+        use rukes_plugins::{NotesPlugin, RemindPlugin, RemindStore, TodoPlugin};
+        let _ = rukes_core::i18n::set_language("es", "");
+        let dir = std::env::temp_dir().join(format!("rukes-rhai-tg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let engine = Arc::new(rukes_core::Engine::new(
+            1,
+            rukes_core::EngineConfig::default(),
+            rukes_core::Frecency::default(),
+        ));
+        engine.set_plugins(vec![
+            Arc::new(NotesPlugin {
+                file: dir.join("notas.md"),
+            }),
+            Arc::new(TodoPlugin {
+                file: dir.join("tareas.md"),
+            }),
+            Arc::new(RemindPlugin {
+                store: RemindStore::open(dir.join("r.json")),
+            }),
+        ]);
+        let script = include_str!("../../../scripts-examples/telegram.rhai");
+        let (head, _) = script.split_once("let res = parse_json").unwrap();
+        let source = format!(
+            "{head}\nlet out = \"\";\n\
+             for m in [\"una idea\", \"/tarea pan\", \"/Recordar@Bot 15m té\", \"/tareas\", \
+             \"/hecha pan\", \"/hecha pan\", \"/recordatorios\", \"/nota\", \"/otro\"] {{ \
+             out += handle(m) + \"\\n\"; }}\nout"
+        );
+        let env = [("TELEGRAM_BOT_TOKEN".to_owned(), "x".to_owned())];
+        let mut i = input(&source, None, quiet());
+        i.env = &env;
+        i.engine = Arc::downgrade(&engine);
+        let r = run(&i);
+        assert_eq!(r.exit, Exit::Code(0), "{}", r.stderr);
+        let lines: Vec<&str> = r.stdout.lines().collect();
+        assert_eq!(lines[0], "📝 Nota guardada");
+        assert_eq!(lines[1], "✅ Tarea añadida");
+        assert_eq!(lines[2], "⏰ Te lo recuerdo en 15m: té");
+        assert_eq!(lines[3..5], ["Pendientes (1):", "• pan"]);
+        assert_eq!(lines[5], "✔️ Hecha");
+        assert!(lines[6].starts_with("No hay ninguna"));
+        assert_eq!(lines[7..9], ["Recordatorios (1):", "• té"]);
+        assert_eq!(lines[9], "Uso: /nota texto");
+        assert!(lines[10].starts_with("Comandos:"));
+        let notes = std::fs::read_to_string(dir.join("notas.md")).unwrap();
+        assert!(notes.contains("— una idea"));
+
+        // Un recordatorio mal escrito no lanza: se responde con el error.
+        let source = format!(
+            "{head}\nlet a = \"\"; try {{ a = handle(\"/recordar pronto x\"); }} catch (e) {{ a = `⚠️ ${{e}}`; }} a"
+        );
+        let mut i = input(&source, None, quiet());
+        i.env = &env;
+        i.engine = Arc::downgrade(&engine);
+        let r = run(&i);
+        assert_eq!(r.exit, Exit::Code(0), "{}", r.stderr);
+        assert!(
+            r.stdout.starts_with("⚠️") && r.stdout.contains("when"),
+            "{}",
+            r.stdout
+        );
+        drop(engine);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

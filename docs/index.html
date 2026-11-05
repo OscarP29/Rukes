@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rukes · Documentación</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0;
+    --code: #f6f8fa; --accent: #3b6fd8; --side: #f6f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #30363d;
+      --code: #161b22; --accent: #7aa2f7; --side: #010409;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  nav {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 240px; overflow-y: auto;
+    background: var(--side); border-right: 1px solid var(--line); padding: 20px 16px;
+  }
+  nav .brand { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  nav .ver { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  nav a {
+    display: block; color: var(--fg); text-decoration: none; padding: 4px 8px;
+    border-radius: 6px; font-size: 14px;
+  }
+  nav a:hover { background: var(--line); }
+  nav .group { color: var(--muted); font-size: 12px; text-transform: uppercase;
+    letter-spacing: .05em; margin: 14px 8px 4px; }
+  main { margin-left: 240px; padding: 32px 48px 80px; max-width: 980px; }
+  h1 { font-size: 30px; margin-top: 0; }
+  h2 { font-size: 22px; margin-top: 48px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 17px; margin-top: 28px; }
+  a { color: var(--accent); }
+  code, pre { font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto;
+    border: 1px solid var(--line); line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code); }
+  .note { border-left: 3px solid var(--accent); background: var(--code); padding: 8px 14px;
+    border-radius: 0 6px 6px 0; margin: 14px 0; }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 5px; font-size: 12px; font-family: inherit; background: var(--code); }
+  @media (max-width: 800px) {
+    nav { position: static; width: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { margin-left: 0; padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand">Rukes</div>
+  <div class="ver">Documentación · v1.0</div>
+  <div class="group">Empezar</div>
+  <a href="#intro">Qué es Rukes</a>
+  <a href="#instalar">Instalación</a>
+  <a href="#basico">Uso básico y teclas</a>
+  <a href="#comandos">Comandos</a>
+  <a href="#ayuda">Ayuda integrada</a>
+  <div class="group">Configurar</div>
+  <a href="#ajustes">Ajustes y config.toml</a>
+  <a href="#carpetas">Carpetas</a>
+  <a href="#apps">Apps, perfiles y archivos</a>
+  <a href="#temas">Temas</a>
+  <a href="#idiomas">Idiomas</a>
+  <div class="group">Productividad</div>
+  <a href="#snippets">Snippets</a>
+  <a href="#notas">Notas, tareas y recordatorios</a>
+  <a href="#portapapeles">Portapapeles</a>
+  <a href="#http">Peticiones HTTP</a>
+  <div class="group">Automatizar</div>
+  <a href="#scripts">Scripts</a>
+  <a href="#workflows">Workflows y triggers</a>
+  <a href="#plugins">Plugins externos</a>
+  <div class="group">Más</div>
+  <a href="#exportar">Exportar, importar y portable</a>
+  <a href="#problemas">Problemas frecuentes</a>
+</nav>
+
+<main>
+
+<h1 id="intro">Qué es Rukes</h1>
+<p>Rukes es un launcher de teclado para Windows 10 (22H2) y Windows 11, escrito en Rust. Pulsas
+<kbd>Alt</kbd>+<kbd>Espacio</kbd>, escribes y pulsas <kbd>Enter</kbd>: abre apps y archivos,
+calcula, convierte unidades y divisas, cambia el volumen, guarda el historial del portapapeles,
+inserta snippets, ejecuta tus scripts y workflows, hace peticiones HTTP y admite plugins escritos
+en cualquier lenguaje.</p>
+<p>No envía telemetría ni se conecta a internet salvo lo que actives tú (tasas de cambio,
+peticiones HTTP que lanzas, scripts o plugins que lo hagan).</p>
+
+<h2 id="instalar">Instalación</h2>
+<table>
+  <tr><th>Forma</th><th>Cómo</th></tr>
+  <tr><td>Instalador</td><td><code>Rukes-&lt;versión&gt;-setup-x64.exe</code>. Se instala para tu
+    usuario en <code>%LOCALAPPDATA%\Programs\Rukes</code>, sin permisos de administrador. Al
+    desinstalar se conserva tu configuración.</td></tr>
+  <tr><td>winget</td><td><code>winget install HenryOsorio.Rukes</code></td></tr>
+  <tr><td>Portable</td><td>Descomprime <code>Rukes-&lt;versión&gt;-portable-x64.zip</code> donde
+    quieras. Con el archivo <code>portable.txt</code> junto al exe, todo se guarda en la carpeta
+    <code>data</code> de al lado.</td></tr>
+  <tr><td>Compilar</td><td><code>cargo build --release -p rukes-app</code> (Rust estable, toolchain
+    MSVC). El exe queda en <code>target/release/rukes.exe</code>.</td></tr>
+</table>
+<p>Rukes queda residente con un icono en la bandeja. Para que arranque con Windows activa
+«Iniciar con Windows» en los ajustes (o <code>start_with_windows = true</code>).</p>
+
+<h2 id="basico">Uso básico y teclas</h2>
+<p>Con la búsqueda vacía aparece una <b>leyenda</b> con ejemplos: haz clic en uno para escribirlo.
+En la fila seleccionada (o bajo el ratón) aparecen <b>botones</b> con las demás acciones; pasa el
+ratón por encima para ver qué hace cada uno.</p>
+<table>
+  <tr><th>Tecla</th><th>Acción</th></tr>
+  <tr><td><kbd>Alt</kbd>+<kbd>Espacio</kbd></td><td>Mostrar u ocultar (configurable)</td></tr>
+  <tr><td><kbd>Enter</kbd></td><td>Acción principal</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Abrir como administrador</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Abrir la carpeta contenedora</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>Copiar la ruta o el valor</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Abrir con… / terminal en la carpeta</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd> / <kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Editar / borrar (scripts, snippets, historial, recordatorios)</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Fijar un elemento del portapapeles</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Panel de vista previa y detalles</td></tr>
+  <tr><td><kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Tab</kbd>, <kbd>Ctrl</kbd>+<kbd>J</kbd>/<kbd>K</kbd></td><td>Moverse por los resultados</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>Ocultar</td></tr>
+</table>
+<p>Rukes aprende: lo que eliges más a menudo para una búsqueda sube en la lista.</p>
+
+<h2 id="comandos">Comandos</h2>
+<table>
+  <tr><th>Escribe</th><th>Qué hace</th></tr>
+  <tr><td><code>chr</code>, <code>code</code></td><td>Abre aplicaciones (menú Inicio, Tienda, PATH)</td></tr>
+  <tr><td><code>informe</code>, <code>f: contrato</code>, <code>d: proyectos</code>, <code>factura .pdf</code></td><td>Archivos y carpetas (todo, solo archivos, solo carpetas, por extensión)</td></tr>
+  <tr><td><code>= 2^10</code>, <code>5 km a millas</code>, <code>70 F en C</code></td><td>Calculadora y unidades</td></tr>
+  <tr><td><code>hora en Tokio</code>, <code>días hasta 25 dic</code></td><td>Horas y fechas</td></tr>
+  <tr><td><code>100 usd a eur</code></td><td>Divisas (con caché; la descarga se activa en ajustes)</td></tr>
+  <tr><td><code>#ff5733</code>, <code>rgb(255 87 51)</code>, <code>hsl(11 100% 60%)</code></td><td>Colores en HEX, RGB, HSL y HSV</td></tr>
+  <tr><td><code>vol 50</code>, <code>vol mute</code>, <code>brillo 70</code>, <code>wifi off</code>, <code>bluetooth</code>, <code>avion</code>, <code>oscuro</code>, <code>claro</code></td><td>Controles del sistema</td></tr>
+  <tr><td><code>github.com</code>, <code>g rust</code>, <code>yt lofi</code></td><td>Abrir una URL o buscar en la web</td></tr>
+  <tr><td><code>&gt; dir</code>, <code>&gt; shell:startup</code></td><td>Comando en la terminal o URI del shell</td></tr>
+  <tr><td><code>bloquear</code>, <code>apagar</code>, <code>vaciar papelera</code></td><td>Comandos del sistema (con confirmación)</td></tr>
+  <tr><td><code>win code</code>, <code>ps</code>, <code>kill chrome</code></td><td>Ventanas abiertas y procesos</td></tr>
+  <tr><td><code>uuid</code>, <code>pass 24</code>, <code>sha256 texto</code>, <code>b64 texto</code></td><td>Generadores y codificadores (Enter copia)</td></tr>
+  <tr><td><code>clip</code>, <code>snip</code>, <code>note</code>, <code>todo</code>, <code>remind</code></td><td>Portapapeles, snippets, notas, tareas, recordatorios</td></tr>
+  <tr><td><code>http 3000/api</code>, <code>post :8080/login {...}</code></td><td>Peticiones HTTP</td></tr>
+  <tr><td><code>workflows</code>, <code>modo trabajo</code>, <code>triggers</code></td><td>Workflows y disparadores</td></tr>
+  <tr><td><code>wall</code>, <code>wall random</code></td><td>Fondos de pantalla</td></tr>
+  <tr><td><code>new script Backup</code>, <code>logs</code></td><td>Crear un script, historial de ejecuciones</td></tr>
+  <tr><td><code>plugins</code></td><td>Plugins externos instalados</td></tr>
+  <tr><td><code>ajustes</code>, <code>configuración</code>, <code>recargar</code>, <code>salir</code></td><td>Comandos de Rukes</td></tr>
+  <tr><td><code>help</code>, <code>help vol</code></td><td>Ayuda de cualquier comando</td></tr>
+</table>
+
+<h2 id="ayuda">Ayuda integrada</h2>
+<p><code>help</code> (o <code>info</code>, <code>ayuda</code>) lista todos los comandos.
+<code>help vol</code>, <code>info calc</code> o <code>help http</code> muestran la ayuda de uno:
+resumen, ejemplos y consejos. <kbd>Enter</kbd> en un ejemplo lo escribe para probarlo y
+<kbd>Ctrl</kbd>+<kbd>P</kbd> muestra la ayuda completa. Los plugins externos pueden añadir la suya
+(ver <a href="#plugin-help">más abajo</a>).</p>
+
+<h2 id="ajustes">Ajustes y config.toml</h2>
+<h3>Panel de ajustes</h3>
+<p>Escribe <code>ajustes</code>, pulsa «Ajustes» en la leyenda o elige «Ajustes…» en el icono de la
+bandeja. Tiene cuatro pestañas:</p>
+<ul>
+  <li><b>General:</b> tema (o «según el sistema» con un tema claro y otro oscuro), idioma, atajo,
+    inicio con Windows, terminal.</li>
+  <li><b>Ventana:</b> posición (centro, arriba o abajo), ancho, resultados visibles, leyenda, qué
+    hacer al abrir, fondo (Mica, Acrílico, sólido), ocultar al perder el foco, animaciones,
+    vista previa.</li>
+  <li><b>Plugins:</b> activar o desactivar cada uno.</li>
+  <li><b>Extras:</b> divisas y su descarga, colores, Everything, programas del PATH.</li>
+</ul>
+<p><b>Guardar</b> (o <kbd>Ctrl</kbd>+<kbd>S</kbd>) escribe solo lo cambiado en
+<code>config.toml</code>, conserva tus comentarios y se aplica sin reiniciar. <kbd>Esc</kbd> vuelve a
+la búsqueda.</p>
+
+<h3>El archivo config.toml</h3>
+<p>Todo lo demás está en <code>%APPDATA%\Rukes\config.toml</code>, que se crea comentado en el
+primer arranque. Escribe <code>configuración</code> en Rukes para abrirlo. Se aplica al guardar.
+Junto a él se genera <code>config.schema.json</code>: con VS Code y la extensión <i>Even Better
+TOML</i> tienes autocompletado y validación. Si te equivocas, Rukes avisa con la línea y la
+columna y sigue con la configuración anterior.</p>
+<pre><code>[general]
+hotkey = "Alt+Space"
+language = "auto"            # auto | es | en
+theme = "system"             # o un tema: "tokyo-night", "midnight"…
+light_theme = "catppuccin-latte"
+dark_theme = "tokyo-night"
+start_with_windows = false
+
+[window]
+position = "center"          # center | top_center | bottom_center
+width = 680
+max_results = 8
+hints = true                 # leyenda de comandos con la búsqueda vacía
+backdrop = "auto"            # auto | mica | acrylic | solid
+
+[plugins.calc]
+currency_online = false      # descargar tasas de cambio
+
+[plugins.web.engines]        # buscadores: palabra clave = URL con {q}
+g = "https://www.google.com/search?q={q}"
+gh = "https://github.com/search?q={q}"</code></pre>
+<p>Cada plugin tiene su sección <code>[plugins.&lt;nombre&gt;]</code> con al menos
+<code>enabled</code>.</p>
+
+<h2 id="carpetas">Carpetas</h2>
+<table>
+  <tr><th>Qué</th><th>Dónde</th></tr>
+  <tr><td>Configuración, temas, idiomas, scripts, snippets, notas, workflows, plugins</td><td><code>%APPDATA%\Rukes</code> (subcarpetas <code>themes</code>, <code>lang</code>, <code>scripts</code>, <code>snippets</code>, <code>notes</code>, <code>workflows</code>, <code>plugins</code>)</td></tr>
+  <tr><td>Caché, índices, historial del portapapeles</td><td><code>%LOCALAPPDATA%\Rukes</code></td></tr>
+  <tr><td>Logs</td><td><code>%LOCALAPPDATA%\Rukes\logs</code> (más detalle con la variable <code>RUKES_LOG=debug</code>)</td></tr>
+</table>
+
+<h2 id="apps">Apps, perfiles y archivos</h2>
+<p>Las apps se indexan del menú Inicio, la Tienda y (opcional) el PATH, y se reindexan solas al
+instalar o quitar programas. Alias propios en <code>[plugins.apps] aliases</code>.</p>
+<h3>Perfiles</h3>
+<p>Una app con argumentos fijos, carpeta y alias:</p>
+<pre><code>[[plugins.apps.profiles]]
+name = "Code en el proyecto"
+target = "Visual Studio Code"   # nombre de una app indexada o una ruta
+args = "-n C:/proyectos/web"
+cwd = "C:/proyectos/web"
+alias = ["cw"]
+admin = false</code></pre>
+<h3>Archivos</h3>
+<pre><code>[plugins.files]
+roots = ["~/Desktop", "~/Documents", "~/Downloads"]
+exclude = ["**/node_modules", "**/.git"]
+min_chars = 3          # caracteres mínimos para buscar archivos sin prefijo
+everything = true      # si Everything (voidtools) está abierto, busca en todo el disco</code></pre>
+
+<h2 id="temas">Temas</h2>
+<p>Incluidos: <code>tokyo-night</code>, <code>catppuccin-latte</code>, <code>catppuccin-frappe</code>,
+<code>catppuccin-macchiato</code>, <code>catppuccin-mocha</code>, <code>gruvbox</code>, <code>nord</code>,
+<code>dracula</code>, <code>midnight</code> (negro puro) y <code>rukes-light</code>. Con
+<code>theme = "system"</code> se usa <code>light_theme</code> o <code>dark_theme</code> según el modo de
+Windows.</p>
+<h3>Crear un tema</h3>
+<p>Crea <code>%APPDATA%\Rukes\themes\mi-tema.toml</code> (nombre en minúsculas, con guiones) y pon
+<code>theme = "mi-tema"</code>. Con <code>extends</code> heredas de otro y cambias solo lo que
+quieras. Se aplica al guardar.</p>
+<pre><code>[theme]
+name = "Mi tema"
+extends = "tokyo-night"     # opcional
+dark = true
+backdrop = "mica"           # mica | acrylic | solid (si [window] backdrop = "auto")
+opacity = 0.55              # opacidad del fondo sobre Mica/Acrílico
+solid_opacity = 1.0         # opacidad con fondo sólido
+radius = 8                  # radio de filas e iconos
+
+[theme.colors]
+background = "#1a1b26"
+foreground = "#c0caf5"
+accent = "#7aa2f7"
+selection = "#283457"
+muted = "#737aa2"
+# divider = "#737aa259"         # por defecto, muted con transparencia
+# selection_foreground = ""     # por defecto, foreground
+
+[theme.font]
+family = "Segoe UI Variable Text"   # cualquier fuente instalada, también Nerd Fonts
+size = 15
+mono = "Cascadia Mono"
+
+[theme.layout]
+row_height = 48
+icon_size = 28
+search_height = 56
+padding = 12
+spacing = 12</code></pre>
+<p>Los colores admiten <code>#rrggbb</code> y <code>#rrggbbaa</code>. Copia un archivo de la carpeta
+<code>themes</code> del repositorio como punto de partida.</p>
+
+<h2 id="idiomas">Idiomas</h2>
+<p><code>language = "auto"</code>, <code>"es"</code> o <code>"en"</code>. Un archivo
+<code>&lt;código&gt;.toml</code> en la carpeta <code>lang</code> de la configuración cambia textos o
+añade un idioma (por ejemplo <code>fr.toml</code>); las claves que falten salen en inglés.</p>
+<pre><code>[search]
+placeholder = "Rechercher…"</code></pre>
+
+<h2 id="snippets">Snippets</h2>
+<p>Textos reutilizables. Escribe su palabra clave (o <code>snip</code> para verlos todos) y pulsa
+<kbd>Enter</kbd>: se pega en la ventana en la que estabas. Se definen en archivos <code>.toml</code>
+de la carpeta <code>snippets</code> (la primera vez se crea uno de ejemplo) o en archivos
+<code>.md</code>, uno por snippet.</p>
+<pre><code>[[snippet]]
+name = "Firma de correo"
+keyword = "firma"
+content = """
+Saludos cordiales,
+{campo:Nombre}
+"""
+
+[[snippet]]
+name = "Fecha de hoy"
+keyword = "hoy"
+content = "{fecha}"</code></pre>
+<table>
+  <tr><th>Variable</th><th>Se sustituye por</th></tr>
+  <tr><td><code>{fecha}</code>, <code>{hora}</code>, <code>{fechahora}</code></td><td>Fecha y hora actuales</td></tr>
+  <tr><td><code>{portapapeles}</code></td><td>Lo que haya en el portapapeles</td></tr>
+  <tr><td><code>{cursor}</code></td><td>Dónde queda el cursor tras pegar</td></tr>
+  <tr><td><code>{campo:Nombre}</code></td><td>Un campo que escribes tras la palabra clave: <code>firma Ana</code> (varios separados por <code>;</code>)</td></tr>
+  <tr><td><code>{{</code> / <code>}}</code></td><td>Llaves literales</td></tr>
+</table>
+<p>En un archivo <code>.md</code> la cabecera es opcional:</p>
+<pre><code>---
+name: Respuesta estándar
+keyword: resp
+---
+Gracias por escribir, {campo:Nombre}. {cursor}</code></pre>
+
+<h2 id="notas">Notas, tareas y recordatorios</h2>
+<ul>
+  <li><code>note idea para el blog</code> añade una nota a <code>notes/notas.md</code>; <code>note</code> lista las recientes.</li>
+  <li><code>todo comprar pan</code> añade una tarea a <code>notes/tareas.md</code>; <code>todo</code> las lista y <kbd>Enter</kbd> completa una.</li>
+  <li><code>remind 15m llamar a Ana</code> o <code>recordar 14:30 reunión</code> crean un recordatorio con notificación; <code>remind</code> los lista y <kbd>Ctrl</kbd>+<kbd>D</kbd> cancela.</li>
+</ul>
+<p>Los archivos son Markdown normal: sirven también en Obsidian. Las rutas se cambian en
+<code>[plugins.notes]</code> (<code>notes_file</code>, <code>todo_file</code>).</p>
+
+<h2 id="portapapeles">Portapapeles</h2>
+<p><code>clip</code> muestra el historial y <code>clip factura</code> busca en él. <kbd>Enter</kbd> pega
+en la ventana anterior, <kbd>Ctrl</kbd>+<kbd>S</kbd> fija, <kbd>Ctrl</kbd>+<kbd>D</kbd> borra. Se
+guarda cifrado (DPAPI) en tu equipo. No guarda lo que los gestores de contraseñas marcan como
+sensible ni lo copiado desde las apps de <code>[plugins.clipboard] exclude</code>.</p>
+
+<h2 id="http">Peticiones HTTP (mini Postman)</h2>
+<table>
+  <tr><th>Escribe</th><th>Envía</th></tr>
+  <tr><td><code>http 3000</code></td><td><code>GET http://localhost:3000</code> (un número es un puerto local)</td></tr>
+  <tr><td><code>get :8080/api/users</code></td><td><code>GET http://localhost:8080/api/users</code></td></tr>
+  <tr><td><code>post 3000/login {"user":"ana"}</code></td><td><code>POST</code> con cuerpo JSON (<code>Content-Type</code> automático)</td></tr>
+  <tr><td><code>put 3000/u/1 -H "Authorization: Bearer x" {"a":1}</code></td><td>Con cabeceras (<code>-H</code>, repetible)</td></tr>
+  <tr><td><code>http api.github.com/users/octocat</code></td><td>Sin esquema: <code>https</code> (y <code>http</code> para localhost e IP)</td></tr>
+  <tr><td><code>http</code></td><td>Historial de la sesión</td></tr>
+</table>
+<p>Nada se envía hasta pulsar <kbd>Enter</kbd>. La respuesta muestra estado, tiempo y tamaño, y el
+cuerpo (JSON formateado) en el panel de detalles. <kbd>Enter</kbd> sobre el estado repite la
+petición; sobre el cuerpo, las cabeceras o «Copiar como curl», los copia. El historial solo vive
+en memoria (puede contener tokens).</p>
+
+<h2 id="scripts">Scripts</h2>
+<p>Cualquier archivo de la carpeta <code>scripts</code> con una cabecera <code>@rukes.name</code>
+aparece en el launcher sin reiniciar. Sirven PowerShell, Python, JavaScript, <code>.bat</code>,
+<code>.cmd</code>, ejecutables y <b>Rhai</b> (lenguaje embebido, se ejecuta dentro de Rukes).
+<code>new script Backup</code> crea uno desde una plantilla, <kbd>Ctrl</kbd>+<kbd>E</kbd> lo edita y
+<code>logs</code> muestra el historial de ejecuciones.</p>
+<pre><code># @rukes.name        Saludar
+# @rukes.description Escribe «hola Ana» y pulsa Enter
+# @rukes.alias       hola
+# @rukes.arg         nombre:text:default=mundo
+# @rukes.output      notification
+# @rukes.timeout     10s
+
+param([string]$nombre = "mundo")
+Write-Output "¡Hola, $nombre!"</code></pre>
+<table>
+  <tr><th>Cabecera</th><th>Significado</th></tr>
+  <tr><td><code>name</code>, <code>description</code>, <code>icon</code></td><td>Cómo aparece en la lista</td></tr>
+  <tr><td><code>alias</code></td><td>Palabra clave; lo que escribas después son los argumentos</td></tr>
+  <tr><td><code>arg</code></td><td><code>nombre:tipo:opciones</code>. Tipos: <code>text</code>, <code>number</code>, <code>file</code>, <code>bool</code>, <code>choice(a|b)</code>. Opciones: <code>required</code>, <code>default=…</code>. Llegan en orden y como <code>RUKES_ARG_&lt;NOMBRE&gt;</code></td></tr>
+  <tr><td><code>output</code></td><td><code>notification</code> (por defecto), <code>launcher</code> (la salida o resultados JSON en la lista), <code>clipboard</code>, <code>terminal</code>, <code>silent</code></td></tr>
+  <tr><td><code>timeout</code></td><td><code>15s</code>, <code>2m</code>; <code>0</code> sin límite</td></tr>
+  <tr><td><code>hotkey</code></td><td>Atajo global, p. ej. <code>Ctrl+Alt+B</code></td></tr>
+  <tr><td><code>admin</code>, <code>cwd</code>, <code>interpreter</code></td><td>Elevar, carpeta de trabajo, intérprete propio</td></tr>
+</table>
+<p>La cabecera va en comentarios (<code>#</code>, <code>//</code>, <code>REM</code>, <code>::</code>…) al
+principio del archivo. Los intérpretes por extensión se configuran en
+<code>[scripts.interpreters]</code>.</p>
+<h3>Rhai</h3>
+<p>Funciones disponibles: <code>clipboard</code>, <code>notify</code>, <code>open</code>,
+<code>run</code>, <code>http</code>, <code>sleep</code>, <code>env</code>, <code>windows</code>,
+<code>focus_window</code> (y <code>http_get</code>).</p>
+<pre><code>// @rukes.name   Mi IP pública
+// @rukes.alias  mi ip
+// @rukes.output clipboard
+let ip = http_get("https://api.ipify.org");
+ip.trim();
+ip</code></pre>
+
+<h2 id="workflows">Workflows y triggers</h2>
+<p>Un workflow abre apps y webs y las coloca en tus monitores (además de cambiar el tema, el plan
+de energía, cerrar programas…). Se definen en archivos <code>.toml</code> de la carpeta
+<code>workflows</code> (la primera vez se crean ejemplos) y aparecen en el launcher por su nombre o
+alias. <kbd>Ctrl</kbd>+<kbd>P</kbd> muestra los pasos antes de ejecutarlo.</p>
+<pre><code>[workflow.trabajo]
+name = "Modo trabajo"
+description = "Editor, documentación y terminal"
+alias = ["work", "trabajo"]
+hotkey = "Ctrl+Alt+1"        # opcional: atajo global
+steps = [
+  { app = "code", window = { monitor = 1, snap = "left", title = "Visual Studio Code" } },
+  { url = "https://docs.rs", window = { monitor = 2, snap = "right" } },
+  { app = "wt.exe", window = { monitor = 1, snap = "right" } },
+  { wait = "2s" },
+  { notify = "Modo trabajo listo" },
+]</code></pre>
+<table>
+  <tr><th>Paso</th><th>Qué hace</th></tr>
+  <tr><td><code>{ app = "…", args, cwd, admin, window }</code></td><td>Abre una app</td></tr>
+  <tr><td><code>{ url = "…", window }</code></td><td>Abre una web</td></tr>
+  <tr><td><code>{ script = "nombre", args = "…" }</code></td><td>Ejecuta uno de tus scripts</td></tr>
+  <tr><td><code>{ wait = "2s" }</code></td><td>Espera</td></tr>
+  <tr><td><code>{ theme = "nord" }</code></td><td>Cambia el tema de Rukes</td></tr>
+  <tr><td><code>{ power_plan = "high_performance" }</code></td><td>Plan de energía (<code>balanced</code>, <code>power_saver</code> o un GUID)</td></tr>
+  <tr><td><code>{ kill = ["Teams.exe"] }</code></td><td>Cierra procesos</td></tr>
+  <tr><td><code>{ notify = "texto" }</code></td><td>Notificación</td></tr>
+</table>
+<p><b>Ventanas:</b> <code>window = { monitor = 2, snap = "left" }</code>. <code>monitor</code>: 1 es el
+principal y luego de izquierda a derecha. <code>snap</code>: <code>left</code>, <code>right</code>,
+<code>top</code>, <code>bottom</code>, cuartos (<code>top-left</code>…), tercios
+(<code>left-third</code>, <code>center-third</code>, <code>right-third</code>,
+<code>left-two-thirds</code>…), <code>center</code>, <code>full</code>, <code>maximize</code>. O
+<code>x</code>, <code>y</code>, <code>width</code>, <code>height</code> en píxeles o
+<code>"50%"</code>. <code>title</code> reconoce la ventana si la app ya estaba abierta.</p>
+<h3>Triggers</h3>
+<p>Ejecutan un workflow o un script a una hora, cada cierto tiempo o al iniciar sesión. Se pausan
+desde la bandeja; <code>triggers</code> lista los próximos.</p>
+<pre><code>[[trigger]]
+at = "09:00"                 # o every = "30m", o on = "login" / "startup"
+days = ["laborables"]        # lun..dom, laborables, finde (opcional)
+run = "workflow:trabajo"     # o "script:backup"</code></pre>
+
+<h2 id="plugins">Plugins externos</h2>
+<p>Un plugin es cualquier programa (Python, Node, Rust, Go…) que habla JSON por stdin/stdout, una
+línea por mensaje. Se instala copiando su carpeta a <code>%APPDATA%\Rukes\plugins\&lt;nombre&gt;</code>;
+Rukes la vigila, así que se instala y se quita en caliente. <code>plugins</code> muestra su estado.
+Cada plugin corre en su propio proceso: si se cuelga o muere no afecta al resto (tiempos máximos
+de 2 s por búsqueda y 10 s por acción; con 3 fallos seguidos queda desactivado).</p>
+<h3>plugin.toml</h3>
+<pre><code>[plugin]
+name = "Cuenta"
+version = "1.0.0"
+executable = "python"          # relativo a la carpeta o comando del PATH
+args = ["-u", "main.py"]
+keywords = ["cuenta", "count"] # "cuenta hola" le envía "hola"
+prefix = "%"                   # opcional
+global = false                 # true = también en búsquedas sin palabra clave
+description = "Cuenta palabras"
+icon = "calc"
+
+[permissions]                  # informativos: se muestran al instalar
+network = false
+clipboard = true
+
+[config]                       # lo recibe en initialize
+palabras_por_minuto = 200</code></pre>
+<h3 id="plugin-help">Ayuda del plugin</h3>
+<p>Lo que muestra <code>help cuenta</code>. Sin esta sección se usan la descripción y las palabras
+clave.</p>
+<pre><code>[help]
+summary = "Cuenta palabras, caracteres y tiempo de lectura"
+tips = ["Enter copia el resultado"]
+
+[[help.usage]]
+example = "cuenta hola mundo"
+description = "Palabras y caracteres"</code></pre>
+<h3>Protocolo</h3>
+<p>Rukes envía <code>initialize</code>, <code>query</code> (con <code>text</code>, el texto sin la
+palabra clave) y <code>action</code> (al pulsar Enter), y avisa con <code>cancel</code> cuando una
+búsqueda ya no interesa. El plugin responde con el mismo <code>id</code>.</p>
+<pre><code>→ {"id": 2, "method": "query", "params": {"query_id": 17, "text": "hola mundo", "raw": "cuenta hola mundo", "targeted": true}}
+← {"id": 2, "result": [{"title": "2 palabras", "subtitle": "Enter copia", "data": "2"}]}
+→ {"id": 3, "method": "action", "params": {"item": {"id": "0", "data": "2"}, "action": "open"}}
+← {"id": 3, "result": {"copy": "2"}}</code></pre>
+<p>Cada resultado admite <code>id</code>, <code>title</code> (obligatorio), <code>subtitle</code>,
+<code>icon</code>, <code>score</code>, <code>preview</code>, <code>detail</code>, <code>data</code> y
+<code>actions</code>. La acción puede responder <code>"hide"</code>, <code>"keep_open"</code>,
+<code>{"query": …}</code>, <code>{"notify": …}</code>, <code>{"copy": …}</code>,
+<code>{"open": …}</code> o <code>{"results": [...]}</code>.</p>
+<h3>Plugin mínimo en Python</h3>
+<pre><code>import json, sys
+
+for line in sys.stdin:
+    msg = json.loads(line)
+    if "id" not in msg:
+        continue  # cancel
+    if msg["method"] == "initialize":
+        result = {}
+    elif msg["method"] == "query":
+        text = msg["params"]["text"]
+        result = [{"title": text.upper(), "data": text.upper()}]
+    else:  # action
+        result = {"copy": msg["params"]["item"]["data"]}
+    print(json.dumps({"id": msg["id"], "result": result}), flush=True)</code></pre>
+<p>El protocolo completo está en <code>docs/plugin-protocol.md</code> y hay ejemplos en
+<code>plugins-examples</code> (Python y Rust).</p>
+
+<h2 id="exportar">Exportar, importar y portable</h2>
+<ul>
+  <li><code>exportar configuración</code> copia tu configuración (config, temas, scripts, snippets,
+    notas, workflows, plugins) a <code>Documentos\Rukes-config-&lt;fecha&gt;</code>. No incluye la caché
+    ni el historial.</li>
+  <li><code>importar C:\ruta\Rukes-config-…</code> la restaura; antes guarda una copia de la actual
+    en <code>Rukes-backup-&lt;fecha&gt;</code>.</li>
+  <li>Desde la línea de comandos: <code>rukes.exe --export &lt;carpeta&gt;</code>,
+    <code>--import &lt;carpeta&gt;</code>, <code>--schema &lt;archivo&gt;</code>.</li>
+  <li><b>Portable:</b> con <code>portable.txt</code> junto a <code>rukes.exe</code>, todo se guarda en
+    la carpeta <code>data</code> de al lado (sirve en un USB).</li>
+</ul>
+
+<h2 id="problemas">Problemas frecuentes</h2>
+<table>
+  <tr><th>Problema</th><th>Solución</th></tr>
+  <tr><td><kbd>Alt</kbd>+<kbd>Espacio</kbd> no abre Rukes</td><td>Otra app usa el atajo. Cámbialo en Ajustes → General; el log dice si no se pudo registrar.</td></tr>
+  <tr><td>Una app nueva no aparece</td><td>Espera unos segundos o escribe <code>recargar</code>.</td></tr>
+  <tr><td>El brillo no está disponible</td><td>Solo funciona en pantallas internas (portátiles).</td></tr>
+  <tr><td>Las divisas dicen «aún no hay tasas»</td><td>Activa «Descargar tasas de cambio» en Ajustes → Extras.</td></tr>
+  <tr><td>Un plugin externo aparece desactivado</td><td>Falló 3 veces seguidas. Mira el log, corrígelo y pulsa Enter sobre él en <code>plugins</code>.</td></tr>
+  <tr><td>Quiero más detalle en el log</td><td>Variable de entorno <code>RUKES_LOG=debug</code>.</td></tr>
+</table>
+
+</main>
+</body>
+</html>
